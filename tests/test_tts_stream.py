@@ -74,3 +74,13 @@ class SegmentStreamTests(unittest.IsolatedAsyncioTestCase):
             engine.executor.shutdown(wait=True)
         self.assertEqual(len(thread_ids), 2)
         self.assertEqual(thread_ids[0], thread_ids[1])
+
+
+class SpeechRateTests(unittest.TestCase):
+    def test_configurable_rate_and_invalid_values(self):
+        for rate in (1.05, 1.12):
+            engine=SpeechEngine(speed=rate)
+            self.assertEqual(engine.speed, rate)
+            engine.executor.shutdown()
+        for rate in (0, 2, float('nan'), True):
+            with self.assertRaises(ValueError): SpeechEngine(speed=rate)

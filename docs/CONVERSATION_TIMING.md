@@ -24,3 +24,11 @@ Owner requested human response timing as Facebot’s target on 2026-10-25.
 The current segmented-STT → complete sentence → TTS prototype is a baseline, not the final latency architecture. Its 250 ms silence detector alone exceeds the median target. Evaluate incremental transcription, response preparation before turn-end, cancellation of outdated work, streaming synthesis and/or mature local full-duplex speech-to-speech components. Do not silently relax the target if this hardware fails it; record the remaining gap.
 
 The earlier 1 s median / 1.5 s p95 proposal is superseded, not an alternative passing tier. Current measured 9B text-to-PCM timing does not pass even that earlier target.
+
+## Current instrumentation and replay — 2026-10-25
+
+The owner-authenticated `/diagnostics` endpoint keeps at most 64 numeric stage records in memory. It accepts the same Bearer pairing authorization as the voice connection; do not publish that token. It records detector speech stop, final transcription, LLM request/first text/completion, synthesis start and first PCM. No speech text, names, audio or images are retained by the timing collector. These are server boundaries, not actual acoustic endpoints; VAD-stop time excludes the detector’s preceding endpoint wait. Proactive replies without a user-turn anchor are excluded. Incomplete turns are counted separately.
+
+A fresh synthetic network replay of “Hey Boo, do you hear me?” received first PCM 1699.24 ms after synthetic input end; explicit interrupt round-trip was 3.56 ms. This single replay is neither physical audible latency nor a p50/p95 estimate. Two server-stage records during the check measured first LLM text at1056–1111 ms after request and first synthesis PCM at112–329 ms after synthesis start. Stage and replay clocks have different anchors. The old1749.3 ms replay remains historical.
+
+`FACEBOT_SPEECH_RATE` selects Kokoro delivery speed, validated from0.8 through1.3. The owner-requested trial uses1.12 versus the prior1.05; this is about6.7% faster speaking, not a6.7% reduction in response delay. Timing cues come from synthesis at the selected speed; physical intelligibility and lip-sync still need validation.

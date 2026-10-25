@@ -10,7 +10,7 @@ import hmac
 import os
 import sys
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, WebSocket
+from fastapi import FastAPI, WebSocket, Header, HTTPException
 from loguru import logger
 from pipecat.audio.vad.silero import SileroVADAnalyzer
 from pipecat.audio.vad.vad_analyzer import VADParams
@@ -29,17 +29,29 @@ from server.tts import SpeechEngine, LocalTTS
 from server.guard import ReplyGuard
 from server.persona import instructions, bounded_context
 from server.scene import SceneState
+from server.timing import StageTiming
 from server.interaction import InteractionState, VisitorControl, ProactiveTurn
 from pipecat.processors.frame_processor import FrameProcessor
 
 class FrameTrace(FrameProcessor):
-    def __init__(self, scene=None, **kwargs):
+    def __init__(self, scene=None, timing=None, **kwargs):
         super().__init__(**kwargs)
+        self.timing = timing
         self.scene = scene
         self.encounter_generation = scene.encounter.generation if scene else 0
 
     async def process_frame(self, frame, direction):
         await super().process_frame(frame, direction)
+        if self.timing:
+            kind = type(frame).__name__
+            stages = {
+                'after_stt': {'VADUserStartedSpeakingFrame':'vad_start', 'VADUserStoppedSpeakingFrame':'vad_stop', 'TranscriptionFrame':'stt_done'},
+                'before_llm': {'LLMContextFrame':'llm_start'},
+                'after_llm': {'LLMTextFrame':'llm_first_text', 'LLMFullResponseEndFrame':'llm_done'},
+                'after_tts': {'TTSAudioRawFrame':'first_pcm'},
+            }
+            stage = stages.get(self.name, {}).get(kind)
+            if stage: self.timing.mark(stage)
         if type(frame).__name__ == "LLMContextFrame" and self.name == "before_llm":
             source = frame.context.get_messages()
             if self.scene and self.encounter_generation != self.scene.encounter.generation:
@@ -69,8 +81,9 @@ def create_app(token, engine=None):
     if os.environ.get('FACEBOT_LLM', 'qwen2.5:1.5b') not in ('qwen2.5:1.5b', 'qwen3.5:9b', 'qwen3:1.7b'):
         raise ValueError('Choose an evaluated local model; cloud model routing is disabled')
     instructions(os.environ.get("FACEBOT_NAME", "Boo"))
-    engine = engine or SpeechEngine(voice=os.environ.get("FACEBOT_VOICE", "af_heart"))
+    engine = engine or SpeechEngine(voice=os.environ.get("FACEBOT_VOICE", "af_heart"), speed=float(os.environ.get("FACEBOT_SPEECH_RATE", "1.12")))
     occupied = asyncio.Lock()
+    timing = StageTiming()
     @asynccontextmanager
     async def lifespan(app):
         # Startup warm-up is synthetic and not a visitor-latency measurement.
@@ -83,6 +96,12 @@ def create_app(token, engine=None):
     @app.get('/health')
     async def health():
         return {'status':'ready', 'occupied':occupied.locked(), 'protocol':1}
+
+    @app.get('/diagnostics')
+    async def diagnostics(authorization: str = Header(default='')):
+        if not hmac.compare_digest(authorization, 'Bearer ' + token):
+            raise HTTPException(status_code=403)
+        return timing.report()
 
     @app.websocket('/voice')
     async def voice(ws: WebSocket):
@@ -112,8 +131,8 @@ def create_app(token, engine=None):
                 model=os.environ.get('FACEBOT_LLM','qwen2.5:1.5b'),
                 max_completion_tokens=64, temperature=.7,
                 extra={'extra_body':{'think':False}}))
-            pipeline = Pipeline([transport.input(), stt, VisitorControl(interaction), pair.user(), ProactiveTurn(interaction, context), FrameTrace(name="before_llm", scene=scene), llm, FrameTrace(name="after_llm"), ReplyGuard(is_silenced=lambda: scene.encounter.silenced),
-                                 LocalTTS(engine), FrameTrace(name="after_tts"), transport.output(), pair.assistant()])
+            pipeline = Pipeline([transport.input(), stt, FrameTrace(name="after_stt", timing=timing), VisitorControl(interaction), pair.user(), ProactiveTurn(interaction, context), FrameTrace(name="before_llm", scene=scene, timing=timing), llm, FrameTrace(name="after_llm", timing=timing), ReplyGuard(is_silenced=lambda: scene.encounter.silenced),
+                                 LocalTTS(engine, timing=timing), FrameTrace(name="after_tts", timing=timing), transport.output(), pair.assistant()])
             task = PipelineTask(pipeline, params=PipelineParams(), enable_rtvi=False)
             @transport.event_handler('on_client_disconnected')
             async def disconnected(transport, websocket):

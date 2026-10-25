@@ -11,7 +11,10 @@ from pipecat.services.settings import TTSSettings
 
 
 class SpeechEngine:
-    def __init__(self, model='mlx-community/Kokoro-82M-bf16', voice='af_heart'):
+    def __init__(self, model='mlx-community/Kokoro-82M-bf16', voice='af_heart', speed=1.05):
+        if not isinstance(speed, (int, float)) or isinstance(speed, bool) or not .8 <= speed <= 1.3:
+            raise ValueError("Speech speed must be between 0.8 and 1.3")
+        self.speed = float(speed)
         self.model_name = model
         self.voice = voice
         self.executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix='facebot-tts')
@@ -22,7 +25,7 @@ class SpeechEngine:
         if self.model is None:
             self.model = load_model(self.model_name)
         pipeline = self.model._get_pipeline('a')
-        for result in pipeline(text, voice=self.voice, speed=1.05):
+        for result in pipeline(text, voice=self.voice, speed=self.speed):
             mx.eval(result.audio)
             if self.model.config.sample_rate != 24000:
                 raise ValueError('Expected Kokoro 24 kHz output')
@@ -69,11 +72,13 @@ class SpeechEngine:
 
 
 class LocalTTS(TTSService):
-    def __init__(self, engine):
+    def __init__(self, engine, timing=None):
         super().__init__(sample_rate=24000, settings=TTSSettings(model=engine.model_name, voice=engine.voice, language="en"))
         self.engine = engine
+        self.timing = timing
 
     async def run_tts(self, text, context_id):
+        if self.timing: self.timing.mark("tts_start")
         async for audio, mouth_cues in self.engine.stream(text):
             yield OutputTransportMessageFrame(message={'type':'visemes', 'cues':mouth_cues})
             # Cancellation/transport granularity; not synthesis latency evidence.

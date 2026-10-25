@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Synthetic network replay of generated speech; not acoustic/device acceptance."""
+import argparse
 import asyncio
 import json
 import pathlib
@@ -14,6 +15,9 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 from server.tts import SpeechEngine
 
 async def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--text', default='May I have some candy?')
+    args = parser.parse_args()
     token = pathlib.Path('.local/pairing-token').read_text()
     url = 'ws://127.0.0.1:8765/voice'
     try:
@@ -22,7 +26,7 @@ async def main():
     except InvalidStatus as e:
         assert e.response.status_code == 403
     engine = SpeechEngine()
-    pcm = await engine.render('May I have some candy?')
+    pcm = await engine.render(args.text)
     engine.executor.shutdown()
     source = np.frombuffer(pcm, dtype='<i2').astype(np.float32)
     input_pcm = resample_poly(source, 2, 3).clip(-32768,32767).astype('<i2').tobytes()
