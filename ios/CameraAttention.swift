@@ -1,10 +1,11 @@
 import AVFoundation
 import Vision
 import QuartzCore
+import CoreImage
 
 /// Capture/session/Vision state is confined to `queue`, including delegate calls.
-/// No sample buffer crosses the queue or leaves the device. The only callback
-/// payload is immutable numeric metadata. Replace this bridge with an executor-
+/// No sample buffer crosses the queue. Callbacks carry numeric observations or
+/// a single bounded JPEG for the paired local Mac. Replace this bridge with an executor-
 /// bound actor when AVFoundation's delegate APIs support that isolation directly.
 final class CameraAttention: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate, @unchecked Sendable {
     private let queue = DispatchQueue(label: "org.facebot.attention", qos: .userInitiated)
@@ -15,15 +16,22 @@ final class CameraAttention: NSObject, AVCaptureVideoDataOutputSampleBufferDeleg
     private var running = false
     private var lastAnalysis = -Double.infinity
     private var reportPending = false
+    private let images = CIContext(options:[.cacheIntermediates:false])
+    private var sample: (@Sendable (Data, Double) async -> Void)?
+    private var imagePending = false
+    private var lastImage = -Double.infinity
 
     init(report: @escaping @MainActor @Sendable (AttentionObservation) -> Void) {
         self.report = report
     }
-    func start() { queue.async { [weak self] in self?.startOnQueue() } }
+    func start(sample: (@Sendable (Data, Double) async -> Void)? = nil) {
+        queue.async { [weak self] in self?.sample = sample; self?.startOnQueue() }
+    }
     func stop() {
         queue.async { [weak self] in
             guard let self else { return }
             self.running = false
+            self.sample = nil
             self.session.stopRunning()
         }
     }
@@ -60,6 +68,20 @@ final class CameraAttention: NSObject, AVCaptureVideoDataOutputSampleBufferDeleg
         let captured = CMSampleBufferGetPresentationTimeStamp(buffer).seconds
         guard captured.isFinite, now >= captured, now-captured < 0.5,
               let pixels = CMSampleBufferGetImageBuffer(buffer) else { return }
+        if let sample, !imagePending, now-lastImage >= 1.5 {
+            lastImage = now
+            let input = CIImage(cvPixelBuffer:pixels)
+            let ratio = min(1,448/max(input.extent.width,input.extent.height))
+            let scaled = input.transformed(by:CGAffineTransform(scaleX:ratio,y:ratio))
+            if let jpeg = images.jpegRepresentation(of:scaled,colorSpace:CGColorSpaceCreateDeviceRGB(),
+                options:[kCGImageDestinationLossyCompressionQuality as CIImageRepresentationOption:0.65]), jpeg.count <= 256_000 {
+                imagePending = true
+                Task { [weak self] in
+                    await sample(jpeg,captured)
+                    self?.queue.async { [weak self] in self?.imagePending = false }
+                }
+            }
+        }
         do {
             try VNImageRequestHandler(cvPixelBuffer: pixels, orientation: .up).perform([request])
             guard CACurrentMediaTime()-captured < 0.5 else { return }

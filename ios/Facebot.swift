@@ -24,6 +24,7 @@ final class FaceController: UIViewController {
     private var foreground = false
     private var attention: CameraAttention?
     private var cameraTask: Task<Void, Never>?
+    private var sceneImages: SceneImageClient?
     override var prefersStatusBarHidden: Bool { true }
     override var prefersHomeIndicatorAutoHidden: Bool { true }
     override func loadView() { view = FaceView() }
@@ -51,11 +52,16 @@ final class FaceController: UIViewController {
     @objc private func activate() {
         guard !foreground else { return }
         foreground = true
-        if pairing != nil {
+        if let pairing {
+            sceneImages = try? SceneImageClient(voiceURL:pairing.url,token:pairing.token)
             cameraTask = Task { [weak self] in
                 let allowed = await AVCaptureDevice.requestAccess(for: .video)
                 guard let self, self.foreground, !Task.isCancelled, allowed else { return }
-                self.attention?.start()
+                if let destination = self.sceneImages {
+                    self.attention?.start { jpeg, captured in
+                        await destination.submit(jpeg:jpeg,capturedAt:captured)
+                    }
+                } else { self.attention?.start() }
             }
         }
         connect()
@@ -63,6 +69,8 @@ final class FaceController: UIViewController {
     @objc private func deactivate() {
         foreground = false; generation += 1
         cameraTask?.cancel(); cameraTask = nil; attention?.stop()
+        let oldImages = sceneImages; sceneImages = nil
+        Task { await oldImages?.close() }
         (view as? FaceView)?.attentionObservation = nil
         connectionTask?.cancel(); connectionTask = nil
         let old = voice; voice = nil

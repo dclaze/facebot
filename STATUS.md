@@ -14,7 +14,7 @@ Public-space safety is **not accepted**: the lexical output guard passes four sy
 
 [Delivery acceptance](docs/ACCEPTANCE.md) was established in commit `7969b2e`. The implementation owner owns runtime validation and results; requirements coordination owns that acceptance document, and the enclosure owner owns hardware design. No duplicate software implementation sessions. The primary native delivery goal remains active.
 
-Implementation checkpoint `f0ddb9a` is pushed and remote/local equality was verified. The acceptance working copy already reflects the researched **200 ms median / 500 ms p95** generated audible reply requirement, superseding earlier provisional timing. Product remains **not delivered**.
+Published software checkpoints include owner coaching `20350c0`, final prompt budgeting `08dbaf1`, iOS speech-mouth cues `e5dd11a`, listening recovery `0542102` and iOS camera attention `4591b4d`. This checkpoint adds bounded iOS scene-image transport. See [iOS validation](docs/IOS_VALIDATION.md) for verified build/synthetic evidence and outstanding physical tests. The **200 ms median / 500 ms p95** generated audible reply requirement remains unmet; product is **not delivered**.
 
 Official Google Android skills installed at source SHA `4ebabf2b0fd6c04b7150023c8b612f80592a6226`: CameraX guidance is available for upcoming local attention implementation; ANR guidance is reserved for concrete Android blocking risks. CameraX main instructions have been read; no remote helper scripts executed.
 
@@ -324,3 +324,12 @@ Android remains the immediate prototype because its physical camera/audio/deploy
 Crowd support is binding for launch. Source now sends saturated face-count metadata plus overflow instead of dropping >32 detections; parser accepts bounded legacy 33/64 counts and normalizes them to “at least 32” without a precise headcount claim. Android attention now keeps at most 16 local temporary position tracks, expires them after 750 ms and uses group-centroid gaze. No track ID leaves that helper or links to memories; no identity/speaker recognition claim.
 
 23 focused Python tests pass (including 600 churn updates with one greeting), plus host-JVM group-attention tests for bounds, movement, expiry and centroid behavior. Android debug build passes. This is synthetic source verification, not camera/crowd acceptance. No restart/deployment, inference workload or visitor media collection during the ongoing trial. Next: safely separate personal memory from running group context to avoid count-churn resets; overlapping speech and actual 1/2/5/10/20+ crowd tiers remain unverified, as do masks/occlusion/noise and iOS parity. Do not remove resets alone and claim memory isolation.
+
+
+## iOS sampled-scene transport — 2026-10-25 16:08 PDT
+
+Added authenticated iOS /vision transport to the same paired Mac:448px/256KB JPEG cap, capture-age prefix, single image in flight,1.5s minimum cadence and25s ACK timeout. It is independent of voice and cannot close the audio socket. Camera buffers stay on their serial queue; one temporary encoded image may reach the Mac. No camera media files or external inference service are introduced. This extends the prior face-metadata-only iOS checkpoint; no physical image-to-dialogue acceptance yet.
+
+Swift6 strict-concurrency simulator build, synthetic image-envelope/security tests and isolated staged-source build pass. No live family camera test performed; physical iOS remains unavailable. Uncommitted presentation settings owned elsewhere were preserved and excluded from this checkpoint. Current shared quota check23:07:44UTC:66%remaining, recorded by existing model-free usage tracker. No paid inference/reset credits. docs/IOS_VALIDATION.md maps implementation to remaining physical gates.
+
+Brief review: simulator compilation and protocol fixtures cannot establish physical-camera accuracy, network latency, acoustic synchronization or12h reliability; those remain explicit. No new monitor or duplicate runtime was started. Canonical status projection now points to recent software evidence instead of only the old initial-prototype commit.
