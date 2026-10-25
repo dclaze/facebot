@@ -5,6 +5,13 @@ from server.protocol import FaceSerializer
 from pipecat.frames.frames import InputAudioRawFrame, OutputAudioRawFrame, InterruptionFrame
 
 class ProtocolTests(unittest.IsolatedAsyncioTestCase):
+    async def test_output_packet_boundary(self):
+        codec = FaceSerializer()
+        self.assertEqual(len(await codec.serialize(OutputAudioRawFrame(bytes(7680), 24000, 1))), 7688)
+        for pcm in (b'', b'1', bytes(7682)):
+            with self.assertRaises(ValueError):
+                await codec.serialize(OutputAudioRawFrame(pcm, 24000, 1))
+
     async def test_audio_format_and_interrupt_epoch(self):
         codec = FaceSerializer()
         frame = await codec.deserialize(bytes(640))

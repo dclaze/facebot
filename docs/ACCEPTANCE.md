@@ -38,13 +38,14 @@ planning approval. Both physical platforms are required before product delivery.
 
 ## Performance measurement
 
-The earlier proposed engineering thresholds are presence-to-visible-reaction
-p95 <=200 ms, speech-onset-to-playback-stop p95 <=250 ms, and complete spoken
-reply p50 <=1 s / p95 <=1.5 s. These are provisional engineering targets, not
-validated claims or a substitute for the owner's requirement of human-like
-responsiveness. The implementation owner may tighten them using conversational
-timing research and actual hardware measurements; record the selected thresholds
-and rationale with the results. Do not silently relax them to fit a slow model.
+The binding thresholds are presence-to-visible-reaction p95 <=200 ms,
+speech-onset-to-playback-stop p95 <=250 ms, and complete spoken reply
+p50 <=200 ms / p95 <=500 ms. The earlier 1 s / 1.5 s speech proposal is
+superseded. See [the conversation timing specification](CONVERSATION_TIMING.md)
+for research, measurement boundaries and the engineering rationale for the tail
+limit. These are requirements, not validated performance claims. Do not silently
+relax them to fit a slow model. Prepared responses must be invalidated when a
+visitor changes or extends an utterance; premature speech cannot improve scores.
 
 Use monotonic timing within each device. If endpoints cross clocks, document the
 clock synchronization or use a common external measurement. Separate host-only

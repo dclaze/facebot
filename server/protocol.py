@@ -2,6 +2,7 @@
 
 Input: 16 kHz mono signed little-endian PCM, 20–100 ms per binary message.
 Output: 8-byte big-endian epoch followed by 24 kHz mono signed LE PCM.
+Output PCM is at most 7680 bytes (160 ms); normal transport pacing is 40 ms.
 A JSON interrupt message advances epoch and requires immediate playback flush.
 """
 import json
@@ -9,6 +10,7 @@ import struct
 from pipecat.frames.frames import InputAudioRawFrame, OutputAudioRawFrame, InterruptionFrame
 from pipecat.serializers.base_serializer import FrameSerializer
 
+MAX_OUTPUT_PCM_BYTES = 7680
 
 class FaceSerializer(FrameSerializer):
     def __init__(self):
@@ -22,6 +24,8 @@ class FaceSerializer(FrameSerializer):
         if isinstance(frame, OutputAudioRawFrame):
             if frame.sample_rate != 24000 or frame.num_channels != 1:
                 raise ValueError('Output format must be mono 24 kHz')
+            if not frame.audio or len(frame.audio) % 2 or len(frame.audio) > MAX_OUTPUT_PCM_BYTES:
+                raise ValueError('Invalid output PCM packet size')
             return struct.pack('!Q', self.epoch) + frame.audio
         return None
 

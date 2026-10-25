@@ -27,3 +27,7 @@ local.properties
 *.aab
 *.jks
 *.keystore
+
+# Device-specific development pairing (never publish paired APKs)
+android/app/src/main/assets/local-config.json
+ios/local-config.json

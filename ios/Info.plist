@@ -7,6 +7,9 @@
 <key>CFBundlePackageType</key><string>APPL</string>
 <key>CFBundleVersion</key><string>1</string>
 <key>CFBundleShortVersionString</key><string>0.1.0</string>
+<key>NSMicrophoneUsageDescription</key><string>Facebot listens locally so visitors can talk to and interrupt the ghost.</string>
+<key>NSLocalNetworkUsageDescription</key><string>Connect to the local Mac that runs the ghost voice.</string>
+<key>NSAppTransportSecurity</key><dict><key>NSAllowsLocalNetworking</key><true/></dict>
 <key>LSRequiresIPhoneOS</key><true/>
 <key>UILaunchScreen</key><dict/>
 <key>UISupportedInterfaceOrientations</key><array><string>UIInterfaceOrientationPortrait</string></array>
