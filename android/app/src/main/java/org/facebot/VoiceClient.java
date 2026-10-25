@@ -5,6 +5,8 @@ import android.media.*;
 import android.media.audiofx.AcousticEchoCanceler;
 import android.util.Log;
 import org.json.JSONObject;
+import org.json.JSONArray;
+import java.util.ArrayDeque;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.Arrays;
@@ -23,6 +25,11 @@ final class VoiceClient extends WebSocketListener {
     private final PlaybackQueue output = new PlaybackQueue();
     private final AtomicBoolean closed = new AtomicBoolean(false);
     private final Object audioLock = new Object();
+    private final ArrayDeque<MouthCue> mouthCues = new ArrayDeque<>();
+    private static final class MouthCue {
+        final long start, end; final String shape;
+        MouthCue(long start,long end,String shape) { this.start=start;this.end=end;this.shape=shape; }
+    }
     private volatile WebSocket socket;
     private volatile long epoch = 0;
     private AudioRecord recorder;
@@ -33,7 +40,29 @@ final class VoiceClient extends WebSocketListener {
     private int oldMode;
     private boolean oldSpeaker;
     private boolean captureObserved, playbackObserved;
+    private long lastSceneSent;
+    private int lastFaceCount = -1;
     VoiceClient(Context context, Listener listener) { this.context=context; this.listener=listener; }
+    String mouthShape() {
+        synchronized(audioLock) {
+            if (player==null || closed.get()) return "rest";
+            long sample=Integer.toUnsignedLong(player.getPlaybackHeadPosition());
+            while(!mouthCues.isEmpty() && mouthCues.peekFirst().end<=sample) mouthCues.removeFirst();
+            MouthCue cue=mouthCues.peekFirst();
+            return cue!=null && cue.start<=sample ? cue.shape : "rest";
+        }
+    }
+    /** Called on the main camera-result executor; drops updates behind audio. */
+    void observeScene(int faces, long analysisMs) {
+        long now=android.os.SystemClock.elapsedRealtime();
+        if (closed.get() || socket==null || analysisMs>500 || faces>32 || socket.queueSize()>1280) return;
+        if (now-lastSceneSent<100 || (faces==lastFaceCount && now-lastSceneSent<250)) return;
+        try {
+            JSONObject event=new JSONObject();
+            event.put("type","scene"); event.put("visible_faces",faces); event.put("age_ms",analysisMs);
+            if (socket.send(event.toString())) { lastSceneSent=now; lastFaceCount=faces; }
+        } catch(Exception ignored) { /* Vision must not block or tear down audio. */ }
+    }
     void connect(String url, String token) {
         // Plaintext is restricted to authorized USB reverse / simulator loopback.
         HttpUrl endpoint=HttpUrl.parse(url.replaceFirst("^ws", "http"));
@@ -144,12 +173,33 @@ final class VoiceClient extends WebSocketListener {
         try {
             JSONObject event=new JSONObject(message);
             if(event.getString("type").equals("interrupt")) flush(event.getLong("epoch"));
+            else if(event.getString("type").equals("visemes")) {
+                long incoming=event.getLong("epoch");
+                if(incoming<epoch) return;
+                if(incoming>epoch) flush(incoming);
+                long offset=event.getLong("offset");
+                JSONArray cues=event.getJSONArray("cues");
+                if(cues.length()>1024 || offset<0) { fail(); return; }
+                synchronized(audioLock) {
+                    if(mouthCues.size()+cues.length()>2048) throw new IllegalArgumentException();
+                    long previous=-1;
+                    for(int i=0;i<cues.length();i++) {
+                        JSONArray cue=cues.getJSONArray(i);
+                        long start=cue.getLong(0), end=cue.getLong(1);
+                        String shape=cue.getString(2);
+                        if(start<previous || end<=start || end>24000*30 ||
+                           !Arrays.asList("rest","closed","teeth","tongue","pucker","round","open","wide","narrow").contains(shape))
+                            throw new IllegalArgumentException();
+                        mouthCues.addLast(new MouthCue(offset+start,offset+end,shape)); previous=end;
+                    }
+                }
+            }
         } catch(Exception error) { fail(); }
     }
     private void flush(long next) {
         synchronized(audioLock) {
             if(next<epoch) return;
-            epoch=next; output.clear();
+            epoch=next; output.clear(); mouthCues.clear();
             if(player!=null) { player.pause(); player.flush(); if(!closed.get()) player.play(); }
         }
         listener.state("Listening",false);

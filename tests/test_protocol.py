@@ -2,9 +2,19 @@ import json
 import struct
 import unittest
 from server.protocol import FaceSerializer
-from pipecat.frames.frames import InputAudioRawFrame, OutputAudioRawFrame, InterruptionFrame
+from pipecat.frames.frames import InputAudioRawFrame, OutputAudioRawFrame, InterruptionFrame, OutputTransportMessageFrame
 
 class ProtocolTests(unittest.IsolatedAsyncioTestCase):
+    async def test_viseme_offset_tracks_pcm_and_resets_on_interrupt(self):
+        codec = FaceSerializer()
+        await codec.serialize(OutputAudioRawFrame(bytes(1920),24000,1))
+        frame = OutputTransportMessageFrame(message={'type':'visemes','cues':[[0,600,'open']]})
+        event = json.loads(await codec.serialize(frame))
+        self.assertEqual((event['offset'],event['epoch']),(960,0))
+        await codec.serialize(InterruptionFrame())
+        event = json.loads(await codec.serialize(frame))
+        self.assertEqual((event['offset'],event['epoch']),(0,1))
+
     async def test_output_packet_boundary(self):
         codec = FaceSerializer()
         self.assertEqual(len(await codec.serialize(OutputAudioRawFrame(bytes(7680), 24000, 1))), 7688)

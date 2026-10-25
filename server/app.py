@@ -28,13 +28,34 @@ from server.protocol import FaceSerializer
 from server.tts import SpeechEngine, LocalTTS
 from server.guard import ReplyGuard
 from server.persona import instructions, bounded_context
+from server.scene import SceneState
+from server.interaction import InteractionState, VisitorControl, ProactiveTurn
 from pipecat.processors.frame_processor import FrameProcessor
 
 class FrameTrace(FrameProcessor):
+    def __init__(self, scene=None, **kwargs):
+        super().__init__(**kwargs)
+        self.scene = scene
+        self.encounter_generation = scene.encounter.generation if scene else 0
+
     async def process_frame(self, frame, direction):
         await super().process_frame(frame, direction)
         if type(frame).__name__ == "LLMContextFrame" and self.name == "before_llm":
-            frame.context.set_messages(bounded_context(frame.context.get_messages(), os.environ.get("FACEBOT_NAME", "Boo")))
+            source = frame.context.get_messages()
+            if self.scene and self.encounter_generation != self.scene.encounter.generation:
+                # Preserve only the new triggering utterance, not another group's history.
+                source = source[-1:] if source and source[-1].get('role') == 'user' and not getattr(frame, 'scene_event', None) else []
+                self.encounter_generation = self.scene.encounter.generation
+            messages = bounded_context(source, os.environ.get("FACEBOT_NAME", "Boo"))
+            if self.scene:
+                messages.insert(1, {'role': 'system', 'content': self.scene.context()})
+            if getattr(frame, 'scene_event', None):
+                messages.append({'role': 'system', 'content':
+                    'EVENT: stable_visual_arrival. This is a camera event, not visitor speech. '
+                    'Initiate one brief, witty welcome to the visible audience at the Halloween table. '
+                    'Do not imply recognition, identify costumes or invent actions. '
+                    'Do not require a name or repeat an introduction. Keep it under 15 words.'})
+            frame.context.set_messages(messages)
         if os.environ.get("FACEBOT_TRACE_FRAMES") == "1" and type(frame).__name__ not in ("InputAudioRawFrame", "OutputAudioRawFrame", "TTSAudioRawFrame"):
             logger.warning("{} {}", self.name, type(frame).__name__)
         await self.push_frame(frame, direction)
@@ -74,7 +95,9 @@ def create_app(token, engine=None):
             return
         async with occupied:
             await ws.accept()
-            codec = FaceSerializer()
+            scene = SceneState()
+            interaction = InteractionState(scene)
+            codec = FaceSerializer(on_scene=scene.update)
             transport = FastAPIWebsocketTransport(ws, FastAPIWebsocketParams(
                 audio_in_enabled=True, audio_out_enabled=True,
                 audio_in_sample_rate=16000, audio_out_sample_rate=24000,
@@ -89,7 +112,7 @@ def create_app(token, engine=None):
                 model=os.environ.get('FACEBOT_LLM','qwen2.5:1.5b'),
                 max_completion_tokens=64, temperature=.7,
                 extra={'extra_body':{'think':False}}))
-            pipeline = Pipeline([transport.input(), stt, pair.user(), FrameTrace(name="before_llm"), llm, FrameTrace(name="after_llm"), ReplyGuard(),
+            pipeline = Pipeline([transport.input(), stt, VisitorControl(interaction), pair.user(), ProactiveTurn(interaction, context), FrameTrace(name="before_llm", scene=scene), llm, FrameTrace(name="after_llm"), ReplyGuard(is_silenced=lambda: scene.encounter.silenced),
                                  LocalTTS(engine), FrameTrace(name="after_tts"), transport.output(), pair.assistant()])
             task = PipelineTask(pipeline, params=PipelineParams(), enable_rtvi=False)
             @transport.event_handler('on_client_disconnected')

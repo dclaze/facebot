@@ -15,6 +15,9 @@ import java.nio.charset.StandardCharsets;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
+import android.graphics.Path;
+import android.graphics.RadialGradient;
+import android.graphics.Shader;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.WindowManager;
@@ -25,8 +28,10 @@ public final class FaceActivity extends ComponentActivity {
     private VoiceClient voice;
     private Attention attention;
     private PreviewView preview;
+    private View cameraOverlay;
     private float gazeX=.5f, gazeY=.5f;
     private boolean present;
+    private String visionState = "Vision starting";
     private FaceView face;
     private boolean resumed;
     private int connectionGeneration;
@@ -59,6 +64,19 @@ public final class FaceActivity extends ComponentActivity {
                 preview.setLayoutParams(cameraLayout);
                 preview.bringToFront();
                 preview.setClickable(false);
+                cameraOverlay = new View(this) {
+                    private final Paint marker = new Paint(Paint.ANTI_ALIAS_FLAG);
+                    @Override protected void onDraw(Canvas canvas) {
+                        if (!present) return;
+                        float x=gazeX*getWidth(), y=gazeY*getHeight();
+                        marker.setColor(Color.rgb(94,255,184)); marker.setStrokeWidth(3);
+                        marker.setStyle(Paint.Style.STROKE);
+                        canvas.drawCircle(x,y,18,marker);
+                        canvas.drawLine(x-26,y,x+26,y,marker);
+                        canvas.drawLine(x,y-26,x,y+26,marker);
+                    }
+                };
+                scene.addView(cameraOverlay, new FrameLayout.LayoutParams(cameraLayout));
             }
         } catch (Exception ignored) { state = "Pairing required"; }
         if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED ||
@@ -86,10 +104,13 @@ public final class FaceActivity extends ComponentActivity {
     private void startAttention() {
         if (attention != null || checkSelfPermission(Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) return;
         try {
-            attention = new Attention(this, preview, (found, x, y) -> {
+            attention = new Attention(this, preview, (found, x, y, status, count, analysisMs) -> {
                 present = found; gazeX = found ? x : .5f; gazeY = found ? y : .5f;
+                visionState = status+" / "+analysisMs+" ms";
+                if (voice != null && count >= 0) voice.observeScene(count,analysisMs);
+                if (cameraOverlay != null) cameraOverlay.invalidate();
             });
-        } catch (Exception ignored) { present = false; }
+        } catch (Exception ignored) { present = false; visionState = "Vision unavailable"; }
     }
     private void connectVoice() {
         main.removeCallbacks(reconnect);
@@ -112,6 +133,23 @@ public final class FaceActivity extends ComponentActivity {
         super.onWindowFocusChanged(focused);
         if (focused) immerse();
     }
+    @Override protected void onNewIntent(android.content.Intent intent) {
+        super.onNewIntent(intent); setIntent(intent);
+        if (intent.getBooleanExtra("renderFacePreview",false)) renderFacePreview();
+    }
+    private void renderFacePreview() {
+        if ((getApplicationInfo().flags & android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE)==0 || face.getWidth()==0) return;
+        for (String mouth : new String[]{"rest","closed","open","wide","round","pucker","teeth","tongue","narrow"}) {
+            android.graphics.Bitmap image=android.graphics.Bitmap.createBitmap(600,1000,android.graphics.Bitmap.Config.ARGB_8888);
+            Canvas canvas=new Canvas(image);canvas.scale(600f/face.getWidth(),1000f/face.getHeight());
+            face.previewShape=mouth;face.draw(canvas);
+            try (java.io.FileOutputStream output=openFileOutput("face-"+mouth+".png",MODE_PRIVATE)) {
+                image.compress(android.graphics.Bitmap.CompressFormat.PNG,100,output);
+            } catch(java.io.IOException ignored) { }
+            image.recycle();
+        }
+        face.previewShape=null;
+    }
     private void immerse() {
         getWindow().getDecorView().setSystemUiVisibility(
             View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY | View.SYSTEM_UI_FLAG_FULLSCREEN |
@@ -120,33 +158,60 @@ public final class FaceActivity extends ComponentActivity {
     }
     private final class FaceView extends View {
         private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        private final Path shape = new Path();
+        private float lookX=.5f, lookY=.5f;
+        private final MouthRenderer mouthRenderer=new MouthRenderer();
+        String previewShape;
         FaceView() { super(FaceActivity.this); setBackgroundColor(Color.BLACK); }
         @Override public boolean onTouchEvent(MotionEvent event) { return true; }
+        private void fill(int color) { paint.setShader(null); paint.setStyle(Paint.Style.FILL); paint.setColor(color); }
+        private void curve(Canvas c,float ax,float ay,float bx,float by,float cx,float cy,float width,int color) {
+            shape.reset(); shape.moveTo(ax,ay); shape.quadTo(bx,by,cx,cy);
+            fill(color); paint.setStyle(Paint.Style.STROKE); paint.setStrokeWidth(width);
+            paint.setStrokeCap(Paint.Cap.ROUND); c.drawPath(shape,paint); paint.setStyle(Paint.Style.FILL);
+        }
         @Override protected void onDraw(Canvas canvas) {
             super.onDraw(canvas);
-            float w = getWidth(), h = getHeight();
-            double seconds = android.os.SystemClock.uptimeMillis() / 1000.0;
-            float bob = (float)Math.sin(seconds * 1.4) * h * .008f;
-            float blink = seconds % 4.7 < .13 ? .012f : .09f;
-            paint.setColor(Color.rgb(192, 255, 231));
-            canvas.save();
-            canvas.translate((gazeX-.5f)*w*.12f,(gazeY-.5f)*h*.045f);
-            canvas.drawOval(w*.15f,h*(.37f-blink)+bob,w*.40f,h*(.37f+blink)+bob,paint);
-            canvas.drawOval(w*.60f,h*(.37f-blink)+bob,w*.85f,h*(.37f+blink)+bob,paint);
+            float w=getWidth(), h=getHeight();
+            double t=android.os.SystemClock.uptimeMillis()/1000.0;
+            lookX+=(gazeX-lookX)*.18f; lookY+=(gazeY-lookY)*.18f;
+            float dx=(lookX-.5f)*.10f, dy=(lookY-.5f)*.045f;
+            float bob=(float)Math.sin(t*1.6)*.006f;
+            int ice=Color.rgb(206,255,238), mint=Color.rgb(94,235,184), deep=Color.rgb(9,54,47);
+            canvas.save(); canvas.scale(w,h); canvas.translate(0,bob);
+            // A faint halo gives the disembodied face depth without a rectangular panel.
+            paint.setShader(new RadialGradient(.5f,.47f,.49f,
+                new int[]{Color.rgb(12,49,43),Color.rgb(3,15,14),Color.BLACK},null,Shader.TileMode.CLAMP));
+            canvas.drawRect(0,0,1,1,paint); paint.setShader(null);
+            float blink=t%5.3<.12 ? .10f : 1f;
+            for(int side=0;side<2;side++) {
+                float cx=side==0?.29f:.71f;
+                float cy=(side==0?.395f:.375f)+dy*.3f;
+                canvas.save(); canvas.rotate(side==0?-8:9,cx,cy);
+                canvas.scale(1,blink,cx,cy);
+                fill(deep); canvas.drawOval(cx-.182f,cy-.091f,cx+.182f,cy+.096f,paint);
+                fill(ice); canvas.drawOval(cx-.163f,cy-.078f,cx+.163f,cy+.078f,paint);
+                // Large moving pupils make attention visible from across the room.
+                fill(mint); canvas.drawOval(cx+dx-.064f,cy+dy-.063f,cx+dx+.064f,cy+dy+.063f,paint);
+                fill(Color.rgb(3,17,15)); canvas.drawOval(cx+dx-.036f,cy+dy-.053f,cx+dx+.036f,cy+dy+.053f,paint);
+                fill(Color.WHITE); canvas.drawOval(cx+dx-.027f,cy+dy-.039f,cx+dx-.009f,cy+dy-.020f,paint);
+                canvas.restore();
+            }
+            // One eyebrow is permanently skeptical. The other rises when someone appears.
+            curve(canvas,.12f,.278f,.25f,present?.217f:.245f,.43f,.279f,.021f,mint);
+            curve(canvas,.57f,.264f,.75f,.196f,.88f,.247f,.024f,ice);
+            fill(mint); shape.reset(); shape.moveTo(.484f,.475f);shape.quadTo(.5f,.456f,.516f,.475f);
+            shape.quadTo(.5f,.490f,.484f,.475f);canvas.drawPath(shape,paint);
+            String mouth=previewShape!=null?previewShape:(voice!=null?voice.mouthShape():"rest");
+            mouthRenderer.draw(canvas,mouth,t,previewShape!=null);
+            curve(canvas,.19f,.548f,.21f,.528f,.25f,.530f,.009f,mint);
+            curve(canvas,.76f,.510f,.80f,.495f,.82f,.518f,.009f,ice);
             canvas.restore();
-            paint.setStyle(Paint.Style.STROKE);
-            paint.setStrokeWidth(w*.025f);
-            paint.setStrokeCap(Paint.Cap.ROUND);
-            if (speaking) canvas.drawOval(w*.43f,h*.52f+bob,w*.57f,h*(.62f+.025f*(float)Math.sin(seconds*16))+bob,paint);
-            else canvas.drawArc(w*.34f,h*.48f+bob,w*.66f,h*.62f+bob,10,160,false,paint);
-            paint.setStyle(Paint.Style.FILL);
-            paint.setTextAlign(Paint.Align.CENTER);
-            paint.setTextSize(w*.065f);
-            canvas.drawText(characterName,w*.5f,h*.77f,paint);
-            paint.setTextSize(w*.025f);
-            paint.setAlpha(130);
-            canvas.drawText(state,w*.5f,h*.82f,paint);
-            paint.setAlpha(255);
+            fill(mint);paint.setTextAlign(Paint.Align.CENTER);
+            paint.setTypeface(android.graphics.Typeface.create("sans-serif-condensed",android.graphics.Typeface.BOLD));
+            paint.setTextSize(w*.036f);canvas.drawText(characterName.toUpperCase(java.util.Locale.ROOT),w*.5f,h*.83f,paint);
+            paint.setTypeface(android.graphics.Typeface.DEFAULT);paint.setTextSize(w*.023f);paint.setAlpha(160);
+            canvas.drawText(previewShape!=null?"SYNTHETIC / "+previewShape:state+"  /  "+visionState,w*.5f,h*.875f,paint);paint.setAlpha(255);
             postInvalidateOnAnimation();
         }
     }

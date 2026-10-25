@@ -4,6 +4,8 @@ Updated: 2026-10-25 (America/Los_Angeles)
 
 ## Current milestone
 
+Active prioritized work: [task list](docs/TASKS.md). Winking is **P1**, queued for deliberate, sparing single-eye expression with smooth recovery and both-platform validation.
+
 Android conversation prototype reached first owner-observed end-to-end response. The Lenovo is authorized in ADB, and the implementation session confirms physical installation and launch. Owner reports the screen works and produces a response. This proves an initial physical conversation, not measured latency, echo rejection, interruption quality, public-space safety, kiosk, iOS parity or endurance. Product is **not delivered**. Public repository: https://github.com/dclaze/facebot.
 
 Public-space safety is **not accepted**: the lexical output guard passes four synthetic semantic requirement violations unchanged. Persona instructions are currently the only layer addressing those boundaries; passing unit tests do not establish family-safe production behavior. See the guard acceptance checkpoint below.
@@ -18,6 +20,7 @@ Official Google Android skills installed at source SHA `4ebabf2b0fd6c04b7150023c
 
 ## Agreed direction
 
+- Prototype runtime budget is now **$0 for paid services**, explicitly confirmed by the owner. Keep speech, reply generation and vision local; no paid API, cloud compute or paid fallback. Codex development usage is separate from application runtime, and the earlier $20 digital budget does not authorize paid prototype runtime.
 - Open-source Halloween face with a highly sassy, funny character.
 - Tablet on a stand, optionally dressed in a costume. Both Android and iOS are now required; the owner plans to connect both physical devices.
 - Local Mac inference, realistic speech, camera-based attention, continuous listening and interruption support.
@@ -48,11 +51,11 @@ Official Google Android skills installed at source SHA `4ebabf2b0fd6c04b7150023c
 
 ## Immediate next step
 
-Connect native Android/iOS continuous audio capture and bounded playback to the local speech prototype, with platform echo cancellation and interruption flush. Add local camera attention. In parallel, pursue incremental/predictive speech to meet the binding 200 ms median / 500 ms p95 target (docs/CONVERSATION_TIMING.md). One active ghost. Both physical devices and 12-hour soaks remain required; product is not delivered.
+Preserve the active child trial: no server restart, deployment or raw recording until a safe boundary. Finish proactive event dispatch and stop/mute enforcement, verify the staged mouth contour fixes, and evaluate actual generated dialogue quality. [Task list](docs/TASKS.md) tracks priorities. Scene detection currently counts visible faces only; returning-person recognition, couch/costume/action perception, acoustic barge-in, binding reply latency, physical iOS and twelve-hour soaks remain unaccepted.
 
 ## Device access dependency
 
-Physical Android install/audio/camera verification requires an authorized ADB connection. Evidence: USB registry sees Lenovo Tab P11, ADB device list is empty, wireless-debug discovery is empty. Owner action: enable USB debugging and accept the connected Mac's authorization prompt on the tablet. Resume trigger: the device appears in ADB as `device`. This blocks physical-device verification, not independent build/server work. iOS physical-device verification also awaits an attached authorized device. Do not reset or enroll either device as a workaround.
+Android USB authorization is resolved; the physical tablet has produced owner-observed audible responses. Do not repeat the former USB-debug request. Physical iOS verification still needs an attached authorized device (owner: Doug; trigger: supported tooling lists the authorized device). Continue independent iOS implementation and simulator/build checks meanwhile. Never reset or enroll devices to work around access.
 
 Face-holder direction has advanced to a minimal two-piece contoured bezel cover. See the enclosure CAD milestone below and `hardware/README.md`; earlier bulky-head concept is superseded.
 
@@ -204,3 +207,85 @@ Doug reports the screen is working end to end and he is getting a response. Dire
 Installed Android preview on Lenovo TB-J606F / Android 11. Both runtime permissions are granted; camera service references Facebot; native capture diagnostic observed; server reports one occupied voice session. AudioFlinger showed the app's 24 kHz playback track with nonzero consumed frames and queued PCM alongside the active 16 kHz capture track. Owner independently reports an audible response. A later metadata sample captured input progress while output was idle; private receipt `.local/android-native-path.json` includes the paired APK SHA-256, not media. No transcript/image/audio retained.
 
 The requested macOS readiness phrase was spoken exactly once after those checks; ignored `.local/readiness-announced` prevents duplicates. The live family feedback trial remains running. No disruptive restart or competing inference benchmark will be performed during the trial without indicating it. Immediate next evidence: interruption behavior, self-echo and perceived reply delay, followed by consented quantitative acoustic checks. Operator force-stop is available through the authorized USB CLI but remains unexercised during this trial. Full acceptance stays open.
+
+## First feedback revision — 2026-10-25T21:36:44.531968+00:00
+
+Owner rejected the placeholder face, reported no visible image processing and insufficient sass. Android face replaced with brows, moving pupils, asymmetric grin, depth shading and speaking mouth motion. Development camera overlay now marks the selected face center; on-screen vision status distinguishes scanning, detection and unavailable results. This makes analysis behavior observable; it does not itself prove detection reliability. CameraX/ML Kit remains the actual local image-processing path, with no identity or retained media.
+
+Persona strengthened with dry sarcasm, mock grandeur and short situational punchlines; remains configurable and family-boundary constrained. Three persona unit tests passed, but perceived sass and semantic safety require live evaluation. Android expressive build passed and installed/launched on the physical tablet; refreshed server shows occupied voice session. Operator force-stop was exercised before the announced update: app process absent and server occupancy released. Audible stop time and visitor stop behavior are not established by that check. No repeated readiness announcement.
+
+Prior implementation checkpoint `02a247d15427239106523a20a26faa1bfa586c6c` pushed and remote equality verified. Latest feedback revision remains a separate working change until evaluated. No paired APK, token, media or device identifier published.
+
+## Queued active-speaker gaze — 2026-10-25T21:37:10.421895+00:00
+
+Added Doug's request to docs/ROADMAP.md under Bring the face to life. Subtle, smoothed gaze should follow evidence of the active speaker, with stable target selection and calm neutral fallback for uncertainty/off-camera speech. Current largest-face tracking does not establish who is speaking. Hardware feasibility and two-person/ambiguous-speech physical validation are required before reliability claims; reuse existing signals, no identity or saved profiles, and no blocking speech/barge-in work. Sole software owner retains the item; current prototype feedback and audio reliability priorities are unchanged. No runtime change or restart for this queued request.
+
+## Proactive interaction requirement — 2026-10-25
+
+Doug explicitly requires proactive behavior: the ghost should initiate greetings and contextual interaction based on fresh observed events instead of waiting for a question. Added a priority section to docs/ROADMAP.md with encounter state, quiet/mute behavior, cooldowns, no fabricated visual claims, and physical acceptance cases. Requirement only; not yet implemented/validated by this update. Runtime remains local with $0 paid services. Software owner receives this as a queued priority request; this coordination chat does not start a duplicate implementation goal.
+
+## Character correction: extreme clean sass — 2026-10-25
+
+Doug says the current character is still too basic. Explicit direction: no cursing; extremely sassy, witty, satirical and edgy while kid-safe. The edge should come from sharp comic reversals, dry delivery, mock grandeur and situational satire, not profanity, sexual innuendo, threats or humiliating visitors. Preserve direct useful answers and respectful silence when needed. Increase specificity and improvisation instead of generic ghost puns, bland greetings or repetitive candy slogans. This is new owner feedback for the existing character/software owners; no runtime improvement is claimed by this note.
+
+## Mill Valley roast corpus — 2026-10-25
+
+Ownership: this chat owns the authored roast corpus only; the Android & iOS apps chat remains the sole runtime implementation owner. Doug requested a hyperlocal, extremely funny, edgy-but-kid-safe roast library with swarm review of every interaction, then clarified that jokes must make sense without niche local knowledge.
+
+- Draft: `content/mill_valley/corpus.json`, 72 synthetic two-turn interactions (64 comic, 8 care/boundary); 11 public source anchors. No real visitor transcripts used.
+- Three independent reviews are in progress: comedy, family boundaries, and local grounding/accessibility. Every reviewer covers every interaction. Initial review found achievement-targeting, a correction ignored by a callback, an ambiguous visitor-directed comeback, and stop-state/privacy wording to repair before delivery.
+- Readable edition: `docs/MILL_VALLEY_ROAST_LIBRARY.md`; selection/performance contract: `content/mill_valley/README.md`. Local place names must come with enough context for children and visitors; adult references may add a second layer but cannot be the only joke.
+- Runtime is unchanged; no live prototype restart, inference benchmark, new implementation owner or deployed-safety claim. Next: reconcile findings, re-review final bytes, validate full coverage and hand off the corpus.
+- Usage policy read at `/Users/mv_server/Development/colaizzo-family/data/.openclaw/workspace/USAGE_BUDGET.md`; latest pre-swarm account telemetry was 23% used / 77% remaining at 2026-10-25 21:52 UTC. No reset credit used.
+
+## Mouth and task-list checkpoint — 2026-10-25
+
+Added docs/TASKS.md with explicit P0/P1 work and acceptance gates; Doug’s wink request is P1 and not yet deployed. Mouth specialist supplied nine continuous-contour visemes, true closed consonants and finite transitions; integration Android build passed in 5 seconds. New native renders and moving-speech review remain required before a quality claim. Synthesis-derived cue timing and fresh scene metadata are implemented, but physical lip-sync, scene latency and richer action understanding remain unaccepted. Local model dialogue screens still showed factual/style failures; no prompt-only improvement claim. The native delivery goal stays active.
+
+## Encounter foundation and live-trial preservation — 2026-10-25
+
+Previous acknowledgment-only turn was no progress; this turn added tested code without restarting the live app/server. New bounded in-memory encounter policy debounces arrivals, rejects stale observation streams, suppresses events during supplied speaking/silence states, prevents repeated introductions and invalidates conversational history after stable audience-count changes or sustained zero detection. FrameTrace now drops prior dialogue on a changed encounter generation, retaining the triggering utterance. This is conservative privacy isolation, not identity recognition; same-count visitor replacement remains unresolved. Event policy is not yet wired to initiate speech or runtime silence state, so proactive behavior is not claimed deployed.
+
+Volunteered-name/correction guidance added to persona without mandatory onboarding; generated compliance is not yet evaluated. No names or visitor media are written to disk. Thirteen focused encounter/scene/persona tests pass (synthetic, no inference). New mouth still review found detached highlight, pinched corners and gray teeth; specialist fixed source, pending native re-render and moving-speech verification. No restart or recording during child trial. Latest quota telemetry 2026-10-25T22:00:47.441Z: 76% remaining; no credits used. Delivery goal stays active.
+
+Closeout correction: projected handoff now replaces obsolete Android authorization and audio-integration blockers with current evidence; historical checkpoints remain labeled by date. No global process change needed.
+
+
+## Context, realism and owner additions — 2026-10-25T22:04:27.363654+00:00
+
+Research deliverables: docs/REALISM_RESEARCH.md (source-led social timing, face/listening/voice priorities, $0 runtime reuse candidates and acceptance); docs/NEIGHBORHOOD_CONTEXT.md (cited public fact cards); ignored private .local/site-context-research.md (exact-property evidence and unresolved build chronology, mode0600). City2021HCS, HRI,2026neighbor planning sheet and city2026Halloween notice reviewed. A neighbor's history is not the installation's history; original build year/architect remain unverified. No historical haunting claim established. Public docs omit the private installation address.
+
+Owner requests now recorded: about3,000passersby, automatic Halloween interaction memories with ZERO visitor setup or retrieval workflow; natural volunteered-name introductions/corrections; volume-capped theatrical scared-face/yelp reaction; a contextual costume dad-joke skill; and separate night-specific rules with occasional ONE PIECE OF CANDY PER PERSON. Added contexts/HALLOWEEN.md and contexts/skills/COSTUME_DAD_JOKE.md. These are behavior contracts awaiting runtime integration, not enabled features. Current face detection does not identify costumes or reliably associate a returning visitor. Previous nickname/secret-word proposal was explicitly rejected and removed from the active specification.
+
+Live trial remains undisturbed by this chat. Source inspection and live health showed an occupied local voice session, disabled transcript debug logging, no audio/video/transcript persistence path in the inspected app, and generated face-preview images rather than camera captures. The child's current conversation was not collected by this work. New night-memory authorization does not retroactively enable collection or model training. Runtime owner must implement bounded local memory, deletion/expiry and association uncertainty; no face/voice biometric enrollment inferred.
+
+Owner reports unnatural voice. Current adapter defaults Kokoro82M/af_heart/speed1.05 and collects synthesis before sending20ms frames. Whole-response generation and transport streaming must be distinguished. Next owner action: controlled synthetic voice/delivery comparisons outside active family use, then compare expressive local alternatives without paid runtime or unsupported latency claims.
+
+User-requested new Codex chats created and renamed: Boo conversation lab (01a17512-3d66-79a3-9083-589fceba2e8a); Boo local dad-joke timing (01a17512-3d66-7c71-a89c-e3c581326806); Boo interaction coverage research (01a17516-346e-75f2-812b-fefd1d38d7ad). Separate CLI workers received bounded file ownership and no-runtime-change instructions. Initial turn-start receipts verified; app wait metadata reported notLoaded/interrupted for a CLI worker while its OS process/event stream continued, so do not treat that metadata alone as completion. The third chat is instructed to use authenticated chatgpt.com with fictional content only and to report an access gap rather than fabricate service use. Results pending, not accepted yet.
+
+Coordination correction: local CLI0.163 and managed server0.153.4 differ. Generated schema exposes turn/steer, but proxy initialization attempts did not return. No immediate steering receipt; CLI queue message01a17512-e7c3-7c20-9913-b07f5ddccd4a delivered as queued to the sole apps owner. Do not claim queued means immediately read. No server/daemon restart or authentication change attempted. Requirements also live in shared files. Usage last checked77%remaining at21:51UTC; reserve policy at /Users/mv_server/Development/colaizzo-family/data/.openclaw/workspace/USAGE_BUDGET.md remains binding; no reset credits or paid runtime services used.
+
+Session review: applied corrections to visitor-memory friction, neighboring-property attribution and synthesis-vs-transport claims; verified private-file exclusion and git diff whitespace check. No overall delivery claim. Immediate integration priorities remain acoustic timing/interruption, expressive local voice, scene-grounded character and the event-specific behavior/memory tasks under Android & iOS apps ownership.
+
+### Roast corpus editorial delivery — 2026-10-25
+
+The 72-interaction **editorial corpus is delivered**; runtime integration and the Facebot product remain not delivered. All 72 entries have final keep decisions from each of three independent reviewers (216 entry-level final reviews, both turns covered). Revised 48 entries; all reviewers independently caught an orphaned follow-up in MV056, which was repaired and rechecked. Final corpus SHA-256: `26ea94930bb712d584276f44e5389b6b10796a53be986b67d533082777f3c359`.
+
+Validation: `python3 scripts/check-roast-corpus.py --require-reviews --render` passes 72 entries, 142 spoken turns, 11 source anchors, exact-hash complete review coverage. Negative structural checks reject duplicate IDs, unknown sources, spoken content in silence actions and overlong lines. Git whitespace check passed. Comedy ratings remain honest: 22 usable, 36 strong, 6 standout, 8 care cases unscored; this is editorial judgment, not measured audience laughter or runtime safety.
+
+User added a follow-on request: show the top 20 dad jokes and have actual ChatGPT.com sessions swarm-review quality, retaining only high-confidence picks. Authenticated browser route opened; three independent review sessions are being prepared. This follow-on shortlist is distinct from the complete corpus and does not discard its usable training/reference entries.
+
+## Proactive dispatch and visitor silence — 2026-10-25
+
+Arrival event dispatch is now wired into the local Pipecat pipeline in source, with explicit system EVENT metadata rather than fabricated user speech. Stable presence triggers at most one greeting per encounter, subject to freshness, speaking/pending-response exclusion, cooldown and a quiet gap. Visitor speech cancels a pending introduction. Supported direct stop phrases latch silence before user aggregation, broadcast interruption and suppress generated output; explicit resume phrases release the latch. This is deterministic phrase handling, not proof that every paraphrase or acoustic situation works.
+
+Synthetic tests cover arrival dispatch, no fictional user turns, stop/resume, speaking exclusion, prior-context removal, one-shot event context, and actual Pipecat timer start/EndFrame cleanup. No local model, microphone or family media was used in these tests. Current live server/tablet were not restarted; these changes and the latest mouth contour fixes remain undeployed to preserve the child trial. Next safe deployment must verify spontaneous greeting, speech-triggered interruption and physical stop/resume. Same-count audience replacement and automatic returning-person memory remain unresolved; no identity claim.
+
+
+## Crowd handling requirement — 2026-10-25T22:06:24.622141+00:00
+
+Doug explicitly requires MANY simultaneous faces / mobs of children. Source review confirms Android receives multiple detections and reports a count, but gaze selects the largest face; no active-speaker association or temporary track set. VoiceClient drops counts above32 and protocol accepts0–32; this is not a measured capacity guarantee. Encounter generation changes with stable count changes, risking dialogue resets in moving crowds. iOS camera parity and physical crowd performance remain unaccepted.
+
+Added docs/CROWD_MODE.md and P0 launch task in docs/TASKS.md: group attention/floor management, bounded ephemeral tracks, graceful overflow, no greeting storms, conversation continuity under background churn, safe personal-memory isolation and controlled physical/synthetic test tiers. Runtime unchanged; no restart, visitor recording or inference workload from this review. Sole apps owner receives concrete findings as a queued message. Verification: inspected current source paths and checked document diff whitespace; no camera/voice capacity claim. Session review: distinguished multi-face detection, transport limits and actual crowded interaction; no material implementation change or new user dependency.
+
+Checkpoint verification: 33 Python tests passed in 4.488 seconds; Android debug build succeeded in 5 seconds. These include synthetic pipeline lifecycle coverage, not physical acceptance. Source publication does not deploy to the running server/tablet.

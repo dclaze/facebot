@@ -115,8 +115,10 @@ actor VoiceClient {
                 case .string(let text):
                     guard let data = text.data(using: .utf8),
                           let event = try JSONSerialization.jsonObject(with: data) as? [String: Any],
-                          event["type"] as? String == "interrupt", let next = event["epoch"] as? UInt64 else { throw AudioError.protocolError }
-                    if next >= epoch { flush(next) }
+                          let type = event["type"] as? String else { throw AudioError.protocolError }
+                    if type == "interrupt", let next = event["epoch"] as? UInt64 {
+                        if next >= epoch { flush(next) }
+                    } else if type != "visemes" { throw AudioError.protocolError }
                 case .data(let data): try await play(data)
                 @unknown default: throw AudioError.protocolError
                 }

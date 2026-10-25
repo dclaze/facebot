@@ -7,25 +7,31 @@ A JSON interrupt message advances epoch and requires immediate playback flush.
 """
 import json
 import struct
-from pipecat.frames.frames import InputAudioRawFrame, OutputAudioRawFrame, InterruptionFrame
+from pipecat.frames.frames import InputAudioRawFrame, OutputAudioRawFrame, InterruptionFrame, OutputTransportMessageFrame
 from pipecat.serializers.base_serializer import FrameSerializer
 
 MAX_OUTPUT_PCM_BYTES = 7680
 
 class FaceSerializer(FrameSerializer):
-    def __init__(self):
+    def __init__(self, on_scene=None):
         super().__init__()
         self.epoch = 0
+        self.output_samples = 0
+        self.on_scene = on_scene
 
     async def serialize(self, frame):
         if isinstance(frame, InterruptionFrame):
             self.epoch += 1
+            self.output_samples = 0
             return json.dumps({'type': 'interrupt', 'epoch': self.epoch})
+        if isinstance(frame, OutputTransportMessageFrame) and frame.message.get('type') == 'visemes':
+            return json.dumps({**frame.message, 'epoch': self.epoch, 'offset': self.output_samples})
         if isinstance(frame, OutputAudioRawFrame):
             if frame.sample_rate != 24000 or frame.num_channels != 1:
                 raise ValueError('Output format must be mono 24 kHz')
             if not frame.audio or len(frame.audio) % 2 or len(frame.audio) > MAX_OUTPUT_PCM_BYTES:
                 raise ValueError('Invalid output PCM packet size')
+            self.output_samples += len(frame.audio)//2
             return struct.pack('!Q', self.epoch) + frame.audio
         return None
 
@@ -39,4 +45,12 @@ class FaceSerializer(FrameSerializer):
         event = json.loads(data)
         if event == {'type': 'interrupt'}:
             return InterruptionFrame()
+        if isinstance(event, dict) and set(event) == {'type', 'visible_faces', 'age_ms'} and event['type'] == 'scene':
+            if type(event['visible_faces']) is not int or not 0 <= event['visible_faces'] <= 32:
+                raise ValueError('Invalid visible face count')
+            if type(event['age_ms']) is not int or not 0 <= event['age_ms'] <= 10000:
+                raise ValueError('Invalid observation age')
+            if self.on_scene:
+                self.on_scene(event)
+            return None
         raise ValueError('Unsupported control message')
