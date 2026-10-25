@@ -21,3 +21,9 @@ node_modules/
 dist/
 build/
 DerivedData/
+.gradle/
+local.properties
+*.apk
+*.aab
+*.jks
+*.keystore

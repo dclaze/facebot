@@ -1,6 +1,6 @@
 # Roadmap
 
-The project remains in planning. These milestones describe intended work, not implemented features.
+Implementation is in progress. These milestones describe required acceptance, not delivered features.
 
 ## 0. Agree on the installation
 
@@ -16,7 +16,7 @@ Benchmark local transcription, language generation, speech synthesis, echo cance
 
 Measure p50/p95 for complete response latency and interruption latency, report failures, and record hardware, versions, background load, and network conditions. Test while audio is playing through the real speaker. Guardrail processing and audio buffering count toward latency.
 
-Proposed boundaries: visible presence to rendered reaction <=200 ms p95; visitor speech onset to audible playback stopping <=250 ms p95; actual visitor utterance end to first meaningful generated audio <=1 s median and <=1.5 s p95. Confirm these targets during planning. Cached speech is measured separately.
+Acceptance boundaries: visible presence to rendered reaction <=200 ms p95; visitor speech onset to audible playback stopping <=250 ms p95; actual visitor utterance end to first meaningful generated audio <=200 ms median and <=500 ms p95. This supersedes the earlier 1 s/1.5 s proposal; see [timing evidence](CONVERSATION_TIMING.md). Cached speech is measured separately.
 
 ## 2. Bring the face to life
 

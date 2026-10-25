@@ -6,7 +6,7 @@ Facebot is a planned open-source, locally powered Halloween character: a tablet 
 
 > “One piece, darling. This is a haunting, not a wholesale operation.”
 
-**Status: planning. There is no runnable application yet.** Facebot is a working name. Follow [STATUS.md](STATUS.md) for the current milestone and [the roadmap](docs/ROADMAP.md) for acceptance criteria.
+**Status: implementation in progress. Native display shells and a local speech-server prototype exist; neither physical platform has passed acceptance.** Facebot is a working name. Follow [STATUS.md](STATUS.md) for the current milestone and [the roadmap](docs/ROADMAP.md) for acceptance criteria.
 
 ## What we want to build
 
@@ -23,14 +23,16 @@ The intended setup is a tablet on a stand, optionally inside a costume, connecte
 
 ## Responsiveness is a core requirement
 
-These are **proposed benchmark targets**, not measured capabilities:
+These are **acceptance targets**, not measured capabilities. The speech target was tightened on 2026-10-25 at the owner’s request to match typical human turn timing:
 
 | Behavior | Target |
 | --- | --- |
 | Visible reaction to an approaching visitor | p95 at or below 200 ms |
 | Stop speaking when interrupted | p95 at or below 250 ms |
-| First meaningful generated speech after a visitor finishes | Median around 1 second; p95 at or below 1.5 seconds |
+| First meaningful generated speech after a visitor finishes | Median at or below **200 ms**; p95 at or below **500 ms** |
 | Sustained event operation | 12 hours on the actual hardware |
+
+The speech clock starts at the visitor’s actual utterance end and stops at the first meaningful audible generated response. It includes endpoint detection, inference, output checks, network and playback buffers. A 10-language conversational study found a mean turn gap of 208 ms and median of 100 ms; our 200 ms median target uses that human-scale timing. The 500 ms p95 is our engineering tail-latency requirement, not a published universal naturalness threshold. See [timing evidence and measurement rules](docs/CONVERSATION_TIMING.md).
 
 Measurements must include the complete user-visible path. Cached greetings and filler do not count as generated replies. Disabling the microphone while speaking does not satisfy the listening requirement.
 
