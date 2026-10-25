@@ -1,5 +1,6 @@
 import Foundation
 import AVFoundation
+import QuartzCore
 
 /// Legacy synchronous converter callback bridge. The buffer is fully initialized
 /// before publication, never mutated afterward, and handed out once under a lock.
@@ -36,6 +37,7 @@ actor VoiceClient {
     private var animationTask: Task<Void, Never>?
     private let mouth: @MainActor @Sendable (String) -> Void
     private var active = false
+    private var sceneSendPending = false
     private var tapInstalled = false
     private var attached = false
     private let state: @MainActor @Sendable (String, Bool) -> Void
@@ -148,6 +150,20 @@ actor VoiceClient {
                 @unknown default: throw AudioError.protocolError
                 }
             } catch { if !Task.isCancelled { await stop(status: "Reconnecting") }; break }
+        }
+    }
+    func observeScene(_ observation: AttentionObservation) async {
+        let age = (CACurrentMediaTime()-observation.observedAt)*1000
+        guard active, !sceneSendPending, let ws = socket, age >= 0, age <= 500 else { return }
+        sceneSendPending = true
+        defer { sceneSendPending = false }
+        do {
+            let event: [String: Any] = ["type":"scene", "visible_faces":observation.faces,
+                                       "overflow":observation.overflow, "age_ms":Int(age)]
+            let data = try JSONSerialization.data(withJSONObject: event)
+            try await ws.send(.string(String(decoding:data, as:UTF8.self)))
+        } catch {
+            // Audio owns reconnection. Stale camera metadata is simply dropped.
         }
     }
     private func flush(_ next: UInt64) {

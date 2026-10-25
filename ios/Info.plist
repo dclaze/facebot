@@ -8,6 +8,7 @@
 <key>CFBundleVersion</key><string>1</string>
 <key>CFBundleShortVersionString</key><string>0.1.0</string>
 <key>NSMicrophoneUsageDescription</key><string>Facebot listens locally so visitors can talk to and interrupt the ghost.</string>
+<key>NSCameraUsageDescription</key><string>Facebot detects nearby faces locally to look toward the audience. Camera images are not saved.</string>
 <key>NSLocalNetworkUsageDescription</key><string>Connect to the local Mac that runs the ghost voice.</string>
 <key>NSAppTransportSecurity</key><dict><key>NSAllowsLocalNetworking</key><true/></dict>
 <key>LSRequiresIPhoneOS</key><true/>

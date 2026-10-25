@@ -22,6 +22,8 @@ final class FaceController: UIViewController {
     private var connectionTask: Task<Void, Never>?
     private var generation = 0
     private var foreground = false
+    private var attention: CameraAttention?
+    private var cameraTask: Task<Void, Never>?
     override var prefersStatusBarHidden: Bool { true }
     override var prefersHomeIndicatorAutoHidden: Bool { true }
     override func loadView() { view = FaceView() }
@@ -32,6 +34,11 @@ final class FaceController: UIViewController {
             pairing = try? JSONDecoder().decode(Pairing.self, from: data)
         }
         (view as? FaceView)?.characterName = pairing?.name ?? "Boo"
+        attention = CameraAttention { [weak self] observation in
+            guard let self, self.foreground else { return }
+            (self.view as? FaceView)?.attentionObservation = observation
+            Task { await self.voice?.observeScene(observation) }
+        }
         NotificationCenter.default.addObserver(self, selector: #selector(activate),
             name: UIApplication.didBecomeActiveNotification, object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(deactivate),
@@ -44,10 +51,19 @@ final class FaceController: UIViewController {
     @objc private func activate() {
         guard !foreground else { return }
         foreground = true
+        if pairing != nil {
+            cameraTask = Task { [weak self] in
+                let allowed = await AVCaptureDevice.requestAccess(for: .video)
+                guard let self, self.foreground, !Task.isCancelled, allowed else { return }
+                self.attention?.start()
+            }
+        }
         connect()
     }
     @objc private func deactivate() {
         foreground = false; generation += 1
+        cameraTask?.cancel(); cameraTask = nil; attention?.stop()
+        (view as? FaceView)?.attentionObservation = nil
         connectionTask?.cancel(); connectionTask = nil
         let old = voice; voice = nil
         (view as? FaceView)?.status = "Muted"
@@ -95,6 +111,9 @@ final class FaceView: UIView {
     var status = "Pairing required"
     var speaking = false
     var mouthShape = "rest"
+    var attentionObservation: AttentionObservation?
+    private var gaze = CGPoint(x:0.5,y:0.5)
+    private var lastTick = CACurrentMediaTime()
     private let mouthRenderer = MouthRenderer()
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -120,7 +139,16 @@ final class FaceView: UIView {
             ticker = link
         }
     }
-    @objc private func tick() { setNeedsDisplay() }
+    @objc private func tick() {
+        let now = CACurrentMediaTime()
+        let fresh = attentionObservation.flatMap { now-$0.observedAt < 0.75 ? $0 : nil }
+        let target = CGPoint(x:fresh?.x ?? 0.5,y:fresh?.y ?? 0.5)
+        let blend = 1-exp(-min(0.1,now-lastTick)/0.08)
+        gaze.x += (target.x-gaze.x)*blend
+        gaze.y += (target.y-gaze.y)*blend
+        lastTick = now
+        setNeedsDisplay()
+    }
     override func draw(_ rect: CGRect) {
         let w = bounds.width, h = bounds.height
         let seconds = CACurrentMediaTime()
@@ -128,8 +156,16 @@ final class FaceView: UIView {
         let blink = seconds.truncatingRemainder(dividingBy: 4.7) < 0.13 ? 0.012 : 0.09
         UIColor(red: 192/255, green: 1, blue: 231/255, alpha: 1).setFill()
         for x in [0.15, 0.60] {
-            UIBezierPath(ovalIn: CGRect(x: w*x, y: h*(0.37-blink)+bob,
-                                       width: w*0.25, height: h*blink*2)).fill()
+            let eye=UIBezierPath(ovalIn: CGRect(x:w*x,y:h*(0.37-blink)+bob,
+                                               width:w*0.25,height:h*blink*2))
+            UIColor(red: 192/255, green: 1, blue: 231/255, alpha: 1).setFill(); eye.fill()
+            if let context=UIGraphicsGetCurrentContext() {
+                context.saveGState(); eye.addClip()
+                UIColor(red:0.01,green:0.06,blue:0.05,alpha:1).setFill()
+                UIBezierPath(ovalIn:CGRect(x:w*(x+0.085+(gaze.x-0.5)*0.05),
+                    y:h*(0.345+(gaze.y-0.5)*0.035)+bob,width:w*0.08,height:h*0.05)).fill()
+                context.restoreGState()
+            }
         }
         mouthRenderer.draw(shape: speaking ? mouthShape : "rest", time: seconds,
                            size: bounds.size, bob: bob)
