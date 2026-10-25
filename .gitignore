@@ -1,0 +1,23 @@
+# Private installation context and local agent handoffs
+.local/
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+# Runtime data must not enter source control
+recordings/
+transcripts/
+captures/
+models/
+weights/
+logs/
+*.log
+# Development outputs
+.DS_Store
+.venv/
+__pycache__/
+node_modules/
+dist/
+build/
+DerivedData/
