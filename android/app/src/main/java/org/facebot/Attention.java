@@ -14,14 +14,16 @@ import com.google.mlkit.vision.face.FaceDetection;
 import com.google.mlkit.vision.face.FaceDetector;
 import com.google.mlkit.vision.face.FaceDetectorOptions;
 import java.util.Collections;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ConcurrentHashMap;
 
-/** Presence only. No identity, emotion inference, tracking IDs or image persistence. */
+/** Ephemeral group positions only. No identity, emotion inference or image persistence. */
 final class Attention {
     interface Listener { void gaze(boolean present, float x, float y, String status, int faces, long analysisMs); }
+    private final GroupAttention group = new GroupAttention();
     private final LifecycleCameraController camera;
     private final FaceDetector detector;
     private final ExecutorService analysis = Executors.newSingleThreadExecutor();
@@ -40,17 +42,20 @@ final class Attention {
                 List<Face> faces=result.getValue(detector);
                 Long started=analysisStarted.remove(result.getTimestamp());
                 long analysisMs=started==null?10001:Math.max(0,(System.nanoTime()-started)/1000000);
-                if(faces==null || faces.isEmpty() || preview.getWidth()==0 || preview.getHeight()==0) {
-                    listener.gaze(false,.5f,.5f, faces==null ? "Vision unavailable" : "Vision: 0 visible faces", faces==null?-1:0, analysisMs); return;
+                long now=android.os.SystemClock.elapsedRealtime();
+                List<GroupAttention.Box> positions=new ArrayList<>();
+                boolean valid=faces!=null && preview.getWidth()>0 && preview.getHeight()>0 && analysisMs<=500;
+                if(valid) for(Face face:faces) {
+                    android.graphics.Rect box=face.getBoundingBox();
+                    // CameraController already maps to preview coordinates.
+                    positions.add(new GroupAttention.Box(box.exactCenterX()/preview.getWidth(),
+                        box.exactCenterY()/preview.getHeight(),(float)box.width()*box.height()));
                 }
-                Face largest=faces.get(0);
-                for(Face face:faces) if(face.getBoundingBox().width()>largest.getBoundingBox().width()) largest=face;
-                // CameraController supplies preview coordinates, including lens transform.
-                // Do not mirror or rotate them a second time.
-                float x=largest.getBoundingBox().exactCenterX()/preview.getWidth();
-                float y=largest.getBoundingBox().exactCenterY()/preview.getHeight();
-                listener.gaze(true,Math.max(0,Math.min(1,x)),Math.max(0,Math.min(1,y)),
-                    "Vision: "+faces.size()+" visible face"+(faces.size()==1?"":"s"),faces.size(),analysisMs);
+                group.update(positions,now);
+                int count=valid?faces.size():-1;
+                String status=count<0?"Vision unavailable": "Vision: "+count+" visible face"+(count==1?"":"s")+" / group gaze";
+                // Brief occlusion holds a position; expires to neutral, never a speaker claim.
+                listener.gaze(group.size()>0,group.x(),group.y(),status,count,analysisMs);
             });
         camera.setImageAnalysisAnalyzer(analysis, new ImageAnalysis.Analyzer() {
                 @Override public int getTargetCoordinateSystem() { return mlkit.getTargetCoordinateSystem(); }

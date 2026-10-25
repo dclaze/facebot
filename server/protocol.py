@@ -45,12 +45,18 @@ class FaceSerializer(FrameSerializer):
         event = json.loads(data)
         if event == {'type': 'interrupt'}:
             return InterruptionFrame()
-        if isinstance(event, dict) and set(event) == {'type', 'visible_faces', 'age_ms'} and event['type'] == 'scene':
-            if type(event['visible_faces']) is not int or not 0 <= event['visible_faces'] <= 32:
+        if isinstance(event, dict) and set(event) in ({'type', 'visible_faces', 'age_ms'}, {'type', 'visible_faces', 'age_ms', 'overflow'}) and event['type'] == 'scene':
+            if type(event['visible_faces']) is not int or not 0 <= event['visible_faces'] <= 4096:
                 raise ValueError('Invalid visible face count')
             if type(event['age_ms']) is not int or not 0 <= event['age_ms'] <= 10000:
                 raise ValueError('Invalid observation age')
+            if 'overflow' in event and type(event['overflow']) is not bool:
+                raise ValueError('Invalid overflow flag')
+            if event.get('overflow') and event['visible_faces'] < 32:
+                raise ValueError('Overflow requires saturated count')
+            normalized = dict(event, visible_faces=min(32, event['visible_faces']),
+                              overflow=event.get('overflow', False) or event['visible_faces'] > 32)
             if self.on_scene:
-                self.on_scene(event)
+                self.on_scene(normalized)
             return None
         raise ValueError('Unsupported control message')

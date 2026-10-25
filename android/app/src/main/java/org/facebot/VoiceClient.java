@@ -55,11 +55,11 @@ final class VoiceClient extends WebSocketListener {
     /** Called on the main camera-result executor; drops updates behind audio. */
     void observeScene(int faces, long analysisMs) {
         long now=android.os.SystemClock.elapsedRealtime();
-        if (closed.get() || socket==null || analysisMs>500 || faces>32 || socket.queueSize()>1280) return;
+        if (closed.get() || socket==null || analysisMs<0 || analysisMs>500 || faces<0 || socket.queueSize()>1280) return;
         if (now-lastSceneSent<100 || (faces==lastFaceCount && now-lastSceneSent<250)) return;
         try {
             JSONObject event=new JSONObject();
-            event.put("type","scene"); event.put("visible_faces",faces); event.put("age_ms",analysisMs);
+            event.put("type","scene"); event.put("visible_faces",Math.min(32,faces)); event.put("overflow",faces>32); event.put("age_ms",analysisMs);
             if (socket.send(event.toString())) { lastSceneSent=now; lastFaceCount=faces; }
         } catch(Exception ignored) { /* Vision must not block or tear down audio. */ }
     }

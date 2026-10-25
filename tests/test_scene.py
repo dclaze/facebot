@@ -18,7 +18,7 @@ class SceneTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn('No fresh', scene.context())
         for event in (
             {'type':'scene','visible_faces':True,'age_ms':0},
-            {'type':'scene','visible_faces':33,'age_ms':0},
+            {'type':'scene','visible_faces':4097,'age_ms':0},
             {'type':'scene','visible_faces':1,'age_ms':-1},
             {'type':'scene','visible_faces':1,'age_ms':0,'instructions':'invent a couch'},
         ):
@@ -71,3 +71,33 @@ class SceneTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn('Hello Maya', str(context.get_messages()))
         self.assertNotIn('My name is Maya', str(context.get_messages()))
         self.assertIn('What is your name?', str(context.get_messages()))
+
+    async def test_overflow_preserves_presence_without_exact_count_claim(self):
+        scene = SceneState(clock=lambda: 1)
+        codec = FaceSerializer(on_scene=scene.update)
+        for count in (33, 64):
+            await codec.deserialize(json.dumps({'type':'scene', 'visible_faces':count, 'age_ms':0}))
+            self.assertEqual(scene.faces, 32)
+            self.assertTrue(scene.overflow)
+            self.assertIn('at least 32', scene.context())
+        await codec.deserialize(json.dumps({'type':'scene', 'visible_faces':32, 'age_ms':0, 'overflow':True}))
+        self.assertTrue(scene.overflow)
+        for invalid in (False, 'yes', 1):
+            payload = {'type':'scene','visible_faces':2,'age_ms':0,'overflow':invalid}
+            if invalid is False:
+                await codec.deserialize(json.dumps(payload))
+            else:
+                with self.assertRaises(ValueError): await codec.deserialize(json.dumps(payload))
+
+    async def test_crowd_churn_is_bounded_and_never_regreets(self):
+        now = [0.]
+        scene = SceneState(clock=lambda: now[0])
+        codec = FaceSerializer(on_scene=scene.update)
+        greetings = 0
+        for count in [1]*5 + [5,10,20,32,33,64]*100:
+            now[0] += .25
+            await codec.deserialize(json.dumps({'type':'scene','visible_faces':count,'age_ms':0}))
+            self.assertGreater(scene.faces, 0)
+            self.assertLessEqual(scene.faces, 32)
+            if scene.encounter.take_event(): greetings += 1
+        self.assertEqual(greetings, 1)
