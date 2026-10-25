@@ -14,6 +14,7 @@ Facebot is a planned open-source, locally powered Halloween character: a tablet 
 - Very natural speech, continuous listening during active sessions, and fast interruption handling.
 - Camera-based attention: notice approaching visitors and react immediately.
 - Local speech, language, and vision processing using existing hardware, with no required cloud inference or token charges.
+- Full-screen character presentation, visitor touches disabled, and owner-only exit.
 - Family-safe sass, operator mute, and no recording or identity recognition by default.
 - Optional candy-bowl commentary that encourages one piece per visitor.
 - Reliable operation for a 12-hour event.

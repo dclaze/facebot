@@ -13,6 +13,8 @@ Reviewed during planning on 2026-10-25. References are not selected dependencies
 
 ## Platform documentation
 
+- [Apple: Guided Access and disabling touch](https://support.apple.com/en-au/111795)
+- [Android: lock task mode](https://developer.android.com/work/dpc/dedicated-devices/lock-task-mode)
 - [Android: run on a hardware device](https://developer.android.com/studio/run/device)
 - [Apple: personal-team provisioning](https://developer.apple.com/help/account/basics/about-your-developer-account)
 - [Apple: voice processing](https://developer.apple.com/documentation/avfaudio/avaudioionode/setvoiceprocessingenabled(_:))

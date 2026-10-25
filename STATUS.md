@@ -15,6 +15,7 @@ Repository-foundation milestone **delivered**: public repository at https://gith
 - Optional candy monitoring to encourage one piece each, with accuracy to be established.
 - Noon-to-midnight operating window; $20 digital budget, with a design goal of no recurring inference charges.
 - Finish planning, get the physical installation working, then discuss pricing.
+- Full-screen character presentation with no visible app/browser controls, ignored visitor touches, and owner-only exit is required.
 - Reuse suitable existing projects. Carry implementation through working versions on both physical platforms after remaining requirements are aligned.
 
 ## Completed
@@ -27,15 +28,15 @@ Repository-foundation milestone **delivered**: public repository at https://gith
 ## Open decisions
 
 1. Exact tablet model and OS; camera view of visitors and candy bowl.
-2. Shared full-screen web app versus native installed apps on both platforms; question pending with the owner. Provisional recommendation: test the shared web path first if acceptable, with physical-device audio/endurance criteria still binding.
+2. Implement the required immersive/touch-locked experience. Proposed approach: shared face interface with thin native clients and platform kiosk controls; exact stack pending device inspection. Browser-only deployment is no longer the preferred baseline.
 3. Voice, character name, and calibrated sass level.
 4. Candy-reminder acceptance criteria; exact hidden-piece counting is not assumed feasible.
 5. Final latency thresholds and full-duplex behavior beyond interruption handling.
 
 ## Immediate next step
 
-Resolve the app-format question, identify both connected devices and placement, then prepare the first physical-device benchmark plan. The owner explicitly requested remaining requirements discussion before full implementation.
+Inspect both devices when connected; establish placement and whether two characters must run simultaneously, then finalize the benchmark-first implementation plan. The owner requested remaining requirements discussion before full implementation.
 
 ## Verification
 
-Documentation-only milestone. No runtime tests or latency claims. Seven-file publication allowlist, staged private-data scan, relative-link checks, private-file exclusion and git diff whitespace checks passed before the first push. No private planning notes were committed. Remote creation and first push succeeded. Final remote metadata/commit verification follows the status update.
+Documentation-only milestone. No runtime tests or latency claims. Seven-file publication allowlist, staged private-data scan, relative-link checks, private-file exclusion and git diff whitespace checks passed before the first push. No private planning notes were committed. Remote creation and first push succeeded. Public visibility, MIT license, main branch and remote/local commit equality verified at commit 57d9421. Subsequent documentation updates require the same push verification.

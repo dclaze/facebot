@@ -6,6 +6,10 @@ The project remains in planning. These milestones describe intended work, not im
 
 Identify the Android and iOS test devices and choose the client approach, camera/bowl geometry, character, voice criteria, and expected crowd behavior. Both platforms must work on physical hardware. Keep development and runtime within the budget. Treat the Mac and tablets as existing hardware; electrical and hardware costs are separate from the digital budget.
 
+### Kiosk acceptance
+
+The face must fill the display without browser/app controls. Ignore visitor touch input and prevent ordinary navigation out of the character; retain an owner-authenticated exit. On iOS, evaluate Guided Access with Touch disabled. On Android, distinguish ordinary screen pinning from stronger DPC-allowlisted lock task mode. Inspect device capabilities before selecting provisioning; do not reset or enroll personal devices without separate authorization. Hardware forced power-off is outside an app-level lock guarantee. Test launch, orientation, system gestures, notifications, touch rejection, owner recovery and reconnect on both physical devices.
+
 ## 1. Prove responsive local speech
 
 Benchmark local transcription, language generation, speech synthesis, echo cancellation, and interruptions on the actual devices. Compare streaming pipelines with suitable local speech-to-speech options. Do not assume any model's advertised latency transfers to the full installation.
