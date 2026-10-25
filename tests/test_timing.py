@@ -48,3 +48,13 @@ class StaleTimingTests(unittest.TestCase):
         for stage in ('vad_stop','stt_done','llm_start','tts_start','first_pcm'):
             now[0]+=1; timing.mark(stage)
         self.assertEqual(timing.report()['samples'][0]['tts_first_pcm_ms'],1000)
+
+    def test_prepared_repairs_are_excluded_from_generated_summary(self):
+        now=[0.]
+        timing=StageTiming(clock=lambda:now[0])
+        for stage in ('vad_start','vad_stop','stt_done','prepared_reply','tts_start','first_pcm'):
+            now[0]+=1;timing.mark(stage)
+        report=timing.report()
+        self.assertEqual(report['completed_samples'],0)
+        self.assertEqual(len(report['prepared_reply_samples']),1)
+        self.assertEqual(report['summary'],{})

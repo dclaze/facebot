@@ -1,5 +1,6 @@
 """Bounded local character context, distilled from docs/LOCAL_LORE.md."""
 import re
+from server.coaching import prompt as coaching_prompt
 
 FACTS = (
     (('stairs','steps','shortcut','dipsea'), 'Mill Valley has hillside steps and paths; the Dipsea route begins with stairs. Local comic texture: even the shortcuts have ambition.'),
@@ -41,4 +42,5 @@ def bounded_context(messages, name='Boo'):
     dialogue = [m for m in messages if isinstance(m,dict) and m.get('role') in ('user','assistant')][-6:]
     latest = next((m.get('content','') for m in reversed(dialogue) if m.get('role')=='user'), '')
     facts = relevant_facts(latest) if isinstance(latest,str) else None
-    return [{'role':'system','content':instructions(name)}] + ([{'role':'system','content':facts}] if facts else []) + dialogue
+    coaching = coaching_prompt()
+    return [{'role':'system','content':instructions(name)}] + ([{'role':'system','content':coaching}] if coaching else []) + ([{'role':'system','content':facts}] if facts else []) + dialogue
