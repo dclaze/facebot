@@ -20,12 +20,16 @@ class StageTiming:
         self.complete=False
         self.incomplete=0
         self.context_samples=deque(maxlen=capacity)
+        self.stage_counts={stage:0 for stage in self.STAGES}
+        self.last_stage_at={}
 
     def record_context(self, receipt):
         self.context_samples.append(receipt)
     def mark(self, stage):
         if stage not in self.STAGES: raise ValueError('Unknown timing stage')
         now=self.clock()
+        self.stage_counts[stage]+=1
+        self.last_stage_at[stage]=now
         if stage=='vad_start':
             if self.active and not self.complete: self.incomplete+=1
             self.active={'vad_start':now}; self.complete=False; self.prepared=False
@@ -55,4 +59,6 @@ class StageTiming:
                 'completed_samples':len(self.samples),'incomplete_turns':self.incomplete,
                 'summary':summary,'samples':list(self.samples),
                 'prepared_reply_samples':list(self.prepared_samples),
-                'context_budget_samples':list(self.context_samples)}
+                'context_budget_samples':list(self.context_samples),
+                'stage_counts':dict(self.stage_counts),
+                'stage_age_ms':{k:round((self.clock()-v)*1000) for k,v in self.last_stage_at.items()}}

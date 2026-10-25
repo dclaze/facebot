@@ -4,16 +4,22 @@ from pipecat.frames.frames import LLMContextFrame, TTSSpeakFrame
 from pipecat.processors.frame_processor import FrameProcessor
 
 class HearingRepair(FrameProcessor):
-    def __init__(self, name='Boo', mark=None):
+    def __init__(self, name='Boo', mark=None, name_provider=None):
         super().__init__()
         self.mark=mark
+        self.name_provider = name_provider
+        self.set_name(name)
+
+    def set_name(self, name):
         # Whisper tiny rendered the synthetic configured name Boo as "Bo".
         # This alias is only for this narrow intent, never identity or wake gating.
         names = '(?:boo|bo)' if name.casefold() == 'boo' else re.escape(name.casefold())
-        self.pattern=re.compile(r'(?:(?:hey|hi) )?(?:'+names+r' )?(?:(?:can|do) you hear me(?: now)?|are you listening)')
+        self.pattern=re.compile(r'(?:(?:hey|hi) )?(?:'+names+r' )?(?:(?:can|do) you hear me(?: now)?|are you listening|(?:are )?you there)')
 
     async def process_frame(self, frame, direction):
         await super().process_frame(frame,direction)
+        if self.name_provider:
+            self.set_name(self.name_provider())
         if isinstance(frame,LLMContextFrame) and not getattr(frame,'scene_event',None):
             messages=frame.context.get_messages()
             latest=messages[-1] if messages else {}

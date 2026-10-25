@@ -85,6 +85,7 @@ def create_app(token, engine=None):
     instructions(os.environ.get("FACEBOT_NAME", "Boo"))
     engine = engine or SpeechEngine(voice=os.environ.get("FACEBOT_VOICE", "af_heart"), speed=float(os.environ.get("FACEBOT_SPEECH_RATE", "1.12")))
     occupied = asyncio.Lock()
+    current_interaction = None
     timing = StageTiming()
     if os.environ.get("FACEBOT_LLM", "qwen2.5:1.5b") != "qwen2.5:1.5b":
         raise ValueError("Install and verify the selected model tokenizer before changing the runtime model")
@@ -106,10 +107,18 @@ def create_app(token, engine=None):
     async def diagnostics(authorization: str = Header(default='')):
         if not hmac.compare_digest(authorization, 'Bearer ' + token):
             raise HTTPException(status_code=403)
-        return timing.report()
+        report = timing.report()
+        report['voice_state'] = ({
+            'silenced': current_interaction.scene.encounter.silenced,
+            'user_speaking': current_interaction.user_speaking,
+            'bot_speaking': current_interaction.bot_speaking,
+            'response_pending': current_interaction.response_pending,
+        } if current_interaction else None)
+        return report
 
     @app.websocket('/voice')
     async def voice(ws: WebSocket):
+        nonlocal current_interaction
         supplied = ws.headers.get('authorization', '')
         if not hmac.compare_digest(supplied, 'Bearer ' + token):
             await ws.close(code=1008)
@@ -121,6 +130,7 @@ def create_app(token, engine=None):
             await ws.accept()
             scene = SceneState()
             interaction = InteractionState(scene)
+            current_interaction = interaction
             codec = FaceSerializer(on_scene=scene.update)
             transport = FastAPIWebsocketTransport(ws, FastAPIWebsocketParams(
                 audio_in_enabled=True, audio_out_enabled=True,
@@ -138,7 +148,10 @@ def create_app(token, engine=None):
                 extra={'extra_body':{'think':False}}))
             pipeline = Pipeline([transport.input(), stt, FrameTrace(name="after_stt", timing=timing), VisitorControl(interaction), pair.user(), ProactiveTurn(interaction, context), HearingRepair(os.environ.get("FACEBOT_NAME", "Boo"), mark=timing.mark), FrameTrace(name="before_llm", scene=scene, timing=timing), BudgetedContext(context_budget, timing), llm, FrameTrace(name="after_llm", timing=timing), ReplyGuard(is_silenced=lambda: scene.encounter.silenced),
                                  LocalTTS(engine, timing=timing), FrameTrace(name="after_tts", timing=timing), transport.output(), pair.assistant()])
-            task = PipelineTask(pipeline, params=PipelineParams(), enable_rtvi=False)
+            # Halloween encounters can be separated by long quiet periods.
+            # Socket disconnect/app lifecycle still cancels this worker.
+            task = PipelineTask(pipeline, params=PipelineParams(), enable_rtvi=False,
+                                idle_timeout_secs=None)
             @transport.event_handler('on_client_disconnected')
             async def disconnected(transport, websocket):
                 await task.cancel()
@@ -148,6 +161,8 @@ def create_app(token, engine=None):
                 # Framework exceptions can contain text; keep runtime log content-free.
                 logger.warning('Voice session failed; connection closed')
                 await ws.close(code=1011)
+            finally:
+                current_interaction = None
     return app
 
 
