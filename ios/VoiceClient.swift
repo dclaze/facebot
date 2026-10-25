@@ -30,11 +30,19 @@ actor VoiceClient {
     private var epoch: UInt64 = 0
     private var playbackGeneration: UInt64 = 0
     private var pendingFrames = 0
+    private var scheduledFrames: Int64 = 0
+    private var playbackBase: Int64 = 0
+    private var timeline = VisemeTimeline()
+    private var animationTask: Task<Void, Never>?
+    private let mouth: @MainActor @Sendable (String) -> Void
     private var active = false
     private var tapInstalled = false
     private var attached = false
     private let state: @MainActor @Sendable (String, Bool) -> Void
-    init(state: @escaping @MainActor @Sendable (String, Bool) -> Void) { self.state = state }
+    init(mouth: @escaping @MainActor @Sendable (String) -> Void = { _ in },
+         state: @escaping @MainActor @Sendable (String, Bool) -> Void) {
+        self.mouth = mouth; self.state = state
+    }
 
     func start(url: URL, token: String) async {
         guard !active else { return }
@@ -69,6 +77,12 @@ actor VoiceClient {
             engine.prepare(); try engine.start(); player.play()
             await state("Listening", false)
             receiveTask = Task { [weak self] in await self?.receiveLoop() }
+            animationTask = Task { [weak self] in
+                while !Task.isCancelled {
+                    await self?.animateMouth()
+                    do { try await Task.sleep(for: .milliseconds(16)) } catch { break }
+                }
+            }
             sendTask = Task { [weak self] in
                 for await chunk in stream {
                     if Task.isCancelled { break }
@@ -113,12 +127,23 @@ actor VoiceClient {
                 guard active && !Task.isCancelled else { break }
                 switch message {
                 case .string(let text):
-                    guard let data = text.data(using: .utf8),
+                    guard text.utf8.count <= 32768, let data = text.data(using: .utf8),
                           let event = try JSONSerialization.jsonObject(with: data) as? [String: Any],
                           let type = event["type"] as? String else { throw AudioError.protocolError }
                     if type == "interrupt", let next = event["epoch"] as? UInt64 {
                         if next >= epoch { flush(next) }
-                    } else if type != "visemes" { throw AudioError.protocolError }
+                    } else if type == "visemes" {
+                        let message = try JSONDecoder().decode(VisemeMessage.self, from: data)
+                        if message.epoch > epoch { flush(message.epoch) }
+                        try timeline.append(message)
+                    } else if type == "expression" {
+                        // Typed expression control is not speech. Rendering parity
+                        // is separate; accepting it must not disconnect voice.
+                        guard let name = event["name"] as? String,
+                              ["neutral", "skeptical", "surprised", "scared", "pleased"].contains(name),
+                              let duration = event["duration_ms"] as? Int,
+                              (100...2500).contains(duration) else { throw AudioError.protocolError }
+                    } else { throw AudioError.protocolError }
                 case .data(let data): try await play(data)
                 @unknown default: throw AudioError.protocolError
                 }
@@ -128,6 +153,7 @@ actor VoiceClient {
     private func flush(_ next: UInt64) {
         playbackGeneration &+= 1
         epoch = next; pendingFrames = 0
+        scheduledFrames = 0; playbackBase = 0; timeline.reset(next)
         player.stop()
         if active { player.play() }
     }
@@ -146,6 +172,13 @@ actor VoiceClient {
             let value = Int16(bitPattern: UInt16(bytes[2*i]) | UInt16(bytes[2*i+1]) << 8)
             buffer.floatChannelData![0][i] = Float(value)/32768
         }
+        if pendingFrames == 0 {
+            // Reset the player clock after an idle gap. Protocol offsets count
+            // audio samples only, not wall time while nobody is speaking.
+            player.stop(); player.play()
+            playbackBase = scheduledFrames
+        }
+        scheduledFrames += Int64(count)
         pendingFrames += count
         let generation = playbackGeneration
         player.scheduleBuffer(buffer, completionCallbackType: .dataPlayedBack) { [weak self] _ in
@@ -158,17 +191,28 @@ actor VoiceClient {
         pendingFrames = max(0, pendingFrames-count)
         if pendingFrames == 0 { await state("Listening", false) }
     }
+    private func animateMouth() async {
+        guard active, pendingFrames > 0, let render = player.lastRenderTime,
+              let position = player.playerTime(forNodeTime: render) else {
+            await mouth("rest"); return
+        }
+        let sample = playbackBase + max(0, position.sampleTime)
+        await mouth(timeline.shape(at: sample))
+    }
     func stop(status: String = "Muted") async {
         active = false; epoch &+= 1; playbackGeneration &+= 1
         continuation?.finish(); continuation = nil
         receiveTask?.cancel(); receiveTask = nil
         sendTask?.cancel(); sendTask = nil
+        animationTask?.cancel(); animationTask = nil
         socket?.cancel(with: .goingAway, reason: nil); socket = nil
         player.stop(); engine.stop(); pendingFrames = 0
+        scheduledFrames = 0; playbackBase = 0; timeline.reset(epoch)
         if tapInstalled { engine.inputNode.removeTap(onBus: 0); tapInstalled = false }
         converter = nil
         try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
         await state(status, false)
+        await mouth("rest")
     }
     enum AudioError: Error { case unavailable, protocolError, queueOverflow }
 }

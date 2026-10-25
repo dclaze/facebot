@@ -65,7 +65,10 @@ final class FaceController: UIViewController {
             guard let self, self.foreground, self.generation == current, !Task.isCancelled else { return }
             guard allowed else { (self.view as? FaceView)?.status = "Microphone permission needed"; return }
             (self.view as? FaceView)?.status = "Connecting"
-            let client = VoiceClient { [weak self] status, speaking in
+            let client = VoiceClient(mouth: { [weak self] shape in
+                guard let self, self.foreground, self.generation == current else { return }
+                (self.view as? FaceView)?.mouthShape = shape
+            }) { [weak self] status, speaking in
                 guard let self, self.foreground, self.generation == current else { return }
                 (self.view as? FaceView)?.status = status
                 (self.view as? FaceView)?.speaking = speaking
@@ -91,10 +94,20 @@ final class FaceView: UIView {
     var characterName = "Boo"
     var status = "Pairing required"
     var speaking = false
+    var mouthShape = "rest"
+    private let mouthRenderer = MouthRenderer()
     override init(frame: CGRect) {
         super.init(frame: frame)
         backgroundColor = .black
         isUserInteractionEnabled = false
+        #if targetEnvironment(simulator)
+        // Synthetic artwork preview only; never enables capture or pairing.
+        let arguments = ProcessInfo.processInfo.arguments
+        if let index = arguments.firstIndex(of: "--mouth-preview"), index+1 < arguments.count,
+           VisemeTimeline.shapes.contains(arguments[index+1]) {
+            mouthShape = arguments[index+1]; speaking = true
+        }
+        #endif
     }
     required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
     override func didMoveToWindow() {
@@ -118,17 +131,8 @@ final class FaceView: UIView {
             UIBezierPath(ovalIn: CGRect(x: w*x, y: h*(0.37-blink)+bob,
                                        width: w*0.25, height: h*blink*2)).fill()
         }
-        let mouth = UIBezierPath()
-        mouth.move(to: CGPoint(x: w*0.35, y: h*0.55+bob))
-        mouth.addQuadCurve(to: CGPoint(x: w*0.65, y: h*0.55+bob),
-                           controlPoint: CGPoint(x: w*0.50, y: h*0.68+bob))
-        UIColor(red: 192/255, green: 1, blue: 231/255, alpha: 1).setStroke()
-        mouth.lineWidth = w*0.025
-        mouth.lineCapStyle = .round
-        if speaking {
-            UIBezierPath(ovalIn: CGRect(x: w*0.43, y: h*0.52+bob,
-                width: w*0.14, height: h*(0.10+0.025*sin(seconds*16)))).fill()
-        } else { mouth.stroke() }
+        mouthRenderer.draw(shape: speaking ? mouthShape : "rest", time: seconds,
+                           size: bounds.size, bob: bob)
         let color = UIColor(red: 192/255, green: 1, blue: 231/255, alpha: 1)
         for (text, y, size) in [(characterName, 0.77, 0.065), (status, 0.82, 0.025)] {
             let attributes: [NSAttributedString.Key: Any] = [.font: UIFont.systemFont(ofSize: w*size), .foregroundColor: color]
