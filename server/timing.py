@@ -19,6 +19,10 @@ class StageTiming:
         self.prepared_samples=deque(maxlen=capacity)
         self.complete=False
         self.incomplete=0
+        self.context_samples=deque(maxlen=capacity)
+
+    def record_context(self, receipt):
+        self.context_samples.append(receipt)
     def mark(self, stage):
         if stage not in self.STAGES: raise ValueError('Unknown timing stage')
         now=self.clock()
@@ -50,4 +54,5 @@ class StageTiming:
         return {'evidence':'server frame-stage timing; not acoustic; VAD stop includes endpoint detection delay',
                 'completed_samples':len(self.samples),'incomplete_turns':self.incomplete,
                 'summary':summary,'samples':list(self.samples),
-                'prepared_reply_samples':list(self.prepared_samples)}
+                'prepared_reply_samples':list(self.prepared_samples),
+                'context_budget_samples':list(self.context_samples)}

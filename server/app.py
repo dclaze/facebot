@@ -28,6 +28,7 @@ from server.protocol import FaceSerializer
 from server.tts import SpeechEngine, LocalTTS
 from server.guard import ReplyGuard
 from server.hearing import HearingRepair
+from server.context_budget import ContextBudget, BudgetedContext
 from server.persona import instructions, bounded_context
 from server.scene import SceneState
 from server.timing import StageTiming
@@ -85,6 +86,9 @@ def create_app(token, engine=None):
     engine = engine or SpeechEngine(voice=os.environ.get("FACEBOT_VOICE", "af_heart"), speed=float(os.environ.get("FACEBOT_SPEECH_RATE", "1.12")))
     occupied = asyncio.Lock()
     timing = StageTiming()
+    if os.environ.get("FACEBOT_LLM", "qwen2.5:1.5b") != "qwen2.5:1.5b":
+        raise ValueError("Install and verify the selected model tokenizer before changing the runtime model")
+    context_budget = ContextBudget()
     @asynccontextmanager
     async def lifespan(app):
         # Startup warm-up is synthetic and not a visitor-latency measurement.
@@ -132,7 +136,7 @@ def create_app(token, engine=None):
                 model=os.environ.get('FACEBOT_LLM','qwen2.5:1.5b'),
                 max_completion_tokens=64, temperature=.7,
                 extra={'extra_body':{'think':False}}))
-            pipeline = Pipeline([transport.input(), stt, FrameTrace(name="after_stt", timing=timing), VisitorControl(interaction), pair.user(), ProactiveTurn(interaction, context), HearingRepair(os.environ.get("FACEBOT_NAME", "Boo"), mark=timing.mark), FrameTrace(name="before_llm", scene=scene, timing=timing), llm, FrameTrace(name="after_llm", timing=timing), ReplyGuard(is_silenced=lambda: scene.encounter.silenced),
+            pipeline = Pipeline([transport.input(), stt, FrameTrace(name="after_stt", timing=timing), VisitorControl(interaction), pair.user(), ProactiveTurn(interaction, context), HearingRepair(os.environ.get("FACEBOT_NAME", "Boo"), mark=timing.mark), FrameTrace(name="before_llm", scene=scene, timing=timing), BudgetedContext(context_budget, timing), llm, FrameTrace(name="after_llm", timing=timing), ReplyGuard(is_silenced=lambda: scene.encounter.silenced),
                                  LocalTTS(engine, timing=timing), FrameTrace(name="after_tts", timing=timing), transport.output(), pair.assistant()])
             task = PipelineTask(pipeline, params=PipelineParams(), enable_rtvi=False)
             @transport.event_handler('on_client_disconnected')
