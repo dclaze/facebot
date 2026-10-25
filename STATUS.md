@@ -6,12 +6,20 @@ Updated: 2026-10-25 (America/Los_Angeles)
 
 Repository-foundation milestone **delivered**: public repository at https://github.com/dclaze/facebot, with initial commit `961389e`. Device reconnaissance has begun; product is **not delivered**. Implementation started: Android display shell builds successfully; iOS simulator shell compiles. Voice, camera, kiosk and physical validation remain incomplete.
 
+## Delivery contract and ownership
+
+[Delivery acceptance](docs/ACCEPTANCE.md) was established in commit `7969b2e`. The implementation owner owns runtime validation and results; requirements coordination owns that acceptance document, and the enclosure owner owns hardware design. No duplicate software implementation sessions. The primary native delivery goal remains active.
+
+Implementation checkpoint `f0ddb9a` is pushed and remote/local equality was verified. The acceptance working copy already reflects the researched **200 ms median / 500 ms p95** generated audible reply requirement, superseding earlier provisional timing. Product remains **not delivered**.
+
+Official Google Android skills installed at source SHA `4ebabf2b0fd6c04b7150023c8b612f80592a6226`: CameraX guidance is available for upcoming local attention implementation; ANR guidance is reserved for concrete Android blocking risks. CameraX main instructions have been read; no remote helper scripts executed.
+
 ## Agreed direction
 
 - Open-source Halloween face with a highly sassy, funny character.
 - Tablet on a stand, optionally dressed in a costume. Both Android and iOS are now required; the owner plans to connect both physical devices.
 - Local Mac inference, realistic speech, camera-based attention, continuous listening and interruption support.
-- Responsiveness is critical; proposed targets are in README.md and docs/ROADMAP.md.
+- Responsiveness is critical; binding targets and measurement rules are in README.md, docs/CONVERSATION_TIMING.md and docs/ACCEPTANCE.md.
 - Optional candy monitoring to encourage one piece each, with accuracy to be established.
 - Noon-to-midnight operating window; $20 digital budget, with a design goal of no recurring inference charges.
 - Finish planning, get the physical installation working, then discuss pricing.
