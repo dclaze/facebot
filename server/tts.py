@@ -17,29 +17,49 @@ class SpeechEngine:
         self.executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix='facebot-tts')
         self.model = None
 
-    def synthesize(self, text, with_cues=False):
-        # All model operations run on the same worker, even after an awaiting
-        # coroutine is cancelled. Never race a surviving Metal inference call.
+    def synthesize_segments(self, text):
+        # One worker owns model operations, including generator advancement/close.
         if self.model is None:
             self.model = load_model(self.model_name)
-        chunks = []
-        mouth_cues = []
-        sample_offset = 0
-        # The pinned pipeline exposes the same synthesis output plus its timings;
-        # no second alignment model or visitor recording is needed.
         pipeline = self.model._get_pipeline('a')
         for result in pipeline(text, voice=self.voice, speed=1.05):
             mx.eval(result.audio)
             if self.model.config.sample_rate != 24000:
                 raise ValueError('Expected Kokoro 24 kHz output')
             samples = np.asarray(result.audio).reshape(-1)
-            chunks.append((np.clip(samples, -1, 1) * 32767).astype('<i2').tobytes())
-            if with_cues and result.pred_dur is not None:
+            audio = (np.clip(samples, -1, 1) * 32767).astype('<i2').tobytes()
+            mouth_cues = []
+            if result.pred_dur is not None:
                 phonemes = [p for p in result.phonemes if self.model.vocab.get(p) is not None]
-                mouth_cues.extend(cues(phonemes, np.asarray(result.pred_dur).tolist(), len(samples), sample_offset))
-            sample_offset += len(samples)
+                mouth_cues = cues(phonemes, np.asarray(result.pred_dur).tolist(), len(samples))
+            yield audio, mouth_cues
+
+    def synthesize(self, text, with_cues=False):
+        chunks, mouth_cues, sample_offset = [], [], 0
+        for audio, segment_cues in self.synthesize_segments(text):
+            chunks.append(audio)
+            mouth_cues.extend([[start+sample_offset, end+sample_offset, shape]
+                               for start, end, shape in segment_cues])
+            sample_offset += len(audio)//2
         audio = b''.join(chunks)
         return (audio, mouth_cues) if with_cues else audio
+
+    async def stream(self, text):
+        # Backpressure: advance only when the consumer asks for another segment.
+        # Kokoro still synthesizes a complete segment internally; this does NOT
+        # make a single short sentence into token-level streaming synthesis.
+        iterator = self.synthesize_segments(text)
+        loop = asyncio.get_running_loop()
+        try:
+            while True:
+                segment = await loop.run_in_executor(self.executor, next, iterator, None)
+                if segment is None:
+                    break
+                yield segment
+        finally:
+            # If inference outlives cancellation, close queues behind it on the
+            # same worker; never run concurrent Metal calls or close on the loop.
+            await loop.run_in_executor(self.executor, iterator.close)
 
     async def render(self, text):
         return await asyncio.get_running_loop().run_in_executor(self.executor, self.synthesize, text)
@@ -54,9 +74,9 @@ class LocalTTS(TTSService):
         self.engine = engine
 
     async def run_tts(self, text, context_id):
-        audio, mouth_cues = await self.engine.render_with_cues(text)
-        yield OutputTransportMessageFrame(message={'type':'visemes', 'cues':mouth_cues})
-        # Keep frames small so framework cancellation can flush at 20 ms boundaries.
-        for offset in range(0, len(audio), 960):
-            yield TTSAudioRawFrame(audio[offset:offset+960], 24000, 1, context_id=context_id)
-            await asyncio.sleep(0)
+        async for audio, mouth_cues in self.engine.stream(text):
+            yield OutputTransportMessageFrame(message={'type':'visemes', 'cues':mouth_cues})
+            # Cancellation/transport granularity; not synthesis latency evidence.
+            for offset in range(0, len(audio), 960):
+                yield TTSAudioRawFrame(audio[offset:offset+960], 24000, 1, context_id=context_id)
+                await asyncio.sleep(0)

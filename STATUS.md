@@ -289,3 +289,21 @@ Doug explicitly requires MANY simultaneous faces / mobs of children. Source revi
 Added docs/CROWD_MODE.md and P0 launch task in docs/TASKS.md: group attention/floor management, bounded ephemeral tracks, graceful overflow, no greeting storms, conversation continuity under background churn, safe personal-memory isolation and controlled physical/synthetic test tiers. Runtime unchanged; no restart, visitor recording or inference workload from this review. Sole apps owner receives concrete findings as a queued message. Verification: inspected current source paths and checked document diff whitespace; no camera/voice capacity claim. Session review: distinguished multi-face detection, transport limits and actual crowded interaction; no material implementation change or new user dependency.
 
 Checkpoint verification: 33 Python tests passed in 4.488 seconds; Android debug build succeeded in 5 seconds. These include synthetic pipeline lifecycle coverage, not physical acceptance. Source publication does not deploy to the running server/tablet.
+
+Published source checkpoint `6ef19615f0811f67069e975379a711a78ac14acf`; GitHub main equality verified. Existing server health remains ready with one occupied voice session after publication; no deployment/restart performed.
+
+
+## Halloween greeting and graceful recovery — 2026-10-25
+
+Owner requests first-class “trick or treat” handling and no technical-failure admissions during the performance. Updated contexts/HALLOWEEN.md with short lively replies, group-chorus deduplication, occasional shared-cooldown candy reminder, no loudness-triggered scare, and explicit prepared-response vs generated-latency distinction. Ordinary hiccups recover in character without backend apologies; persistent failure becomes quiet with accurate owner diagnostics, not fabricated perception, memory or success. Direct capability/privacy questions remain accurate. Event rules only; runtime integration and physical acceptance pending. Diff whitespace check passed; no app restart or content recording.
+
+
+## Halloween personal-space rule — 2026-10-25
+
+Added owner-requested DO NOT TOUCH MY FACE boundary to contexts/HALLOWEEN.md with preferred line “Do not touch my face. Personal space—it's not just for the living.” Includes contact-episode cooldown, normal volume, no escalating insults, no unsupported touching/person attribution, operator maintenance and stop/mute precedence. Screen-contact detection under kiosk/touch-lock must be verified; enclosure contact is not assumed detectable. Specification only, queued to runtime owner. No live app change; diff whitespace check passed.
+
+## Voice buffering and queued event context — 2026-10-25
+
+Received selectable Halloween context, costume skill contract, public neighborhood grounding and realism research. Costume skill is explicitly queued in TASKS; face detection is not costume evidence. Public documents reviewed for integration scope; private exact-property report remains ignored and excluded, not runtime context. Names/corrections and zero-visitor-setup memory remain requirements; no nickname/code workflow.
+
+Speech adapter now yields each completed Kokoro segment with corresponding relative visemes before requesting the next segment. Ten focused TTS/viseme/protocol tests pass, including cancellation while the worker is busy and same-worker generator cleanup. This fixes whole-result collection across segments, not Kokoro’s internal whole-segment synthesis or the guard’s complete-text buffering. No real synthesis latency or voice quality improvement claimed. Benchmarks of expressive alternatives are deferred until outside the live child trial; no server restart, new inference workload or recording was performed. Crowd requirements also expose count-change context resets as a continuity limitation to replace with separated group/personal memory; current source is not crowd-accepted.

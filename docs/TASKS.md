@@ -6,6 +6,8 @@ Unchecked items are not accepted, even where prototype code exists.
 
 ## P0 — make the live prototype compelling and reliable
 
+- [ ] Improve unnatural voice and delivery at $0 runtime cost: compare installed voices on identical synthetic lines after the live trial; measure genuine synthesis first-audio time. Segment emission is implemented, but Kokoro still generates each segment in full. Evaluate expressive Qwen3-TTS/Chatterbox only outside the trial, with exact local latency and license evidence.
+
 - [ ] **Crowd mode (launch requirement):** support many visible faces with stable group attention, bounded temporary tracks, graceful overflow and overlapping-speech repair. Preserve conversation through background count changes without leaking personal memory across visitors. Current largest-face gaze and0–32 count transport are not crowd acceptance. See [crowd requirements](CROWD_MODE.md).
 
 - [ ] Polish the mouth: distinct phoneme shapes, sealed M/B/P, natural teeth/tongue and smooth transitions. Review native renders and moving speech; verify playback alignment and interruption reset. New Android renderer builds; visual and acoustic acceptance pending.
@@ -17,6 +19,9 @@ Unchecked items are not accepted, even where prototype code exists.
 - [ ] Close semantic safety gaps and verify immediate operator mute / visitor stop in the running app.
 
 ## P1 — expressive behavior and complete device experience
+
+- [ ] **Costume dad-joke skill (queued):** integrate [the behavior contract](../contexts/skills/COSTUME_DAD_JOKE.md) under a selectable [Halloween context](../contexts/HALLOWEEN.md). Require a spoken costume statement or supported fresh vision evidence; respect corrections, floor, cooldown, recent repetition, silence and distress. Current face detection does not recognize costumes.
+- [ ] Separate selectable event/night rules from core behavior, with occasional clear one-piece-per-person reminders. Use bounded [public neighborhood facts](NEIGHBORHOOD_CONTEXT.md); never ingest the private property report.
 
 - [ ] **Wink:** add an independently controlled single-eye close, brief hold and smooth reopen. Keep the other eye expressive; distinguish a deliberate wink from a blink. Use sparingly at an earned comic beat, with cooldown and neutral recovery; never block mouth, gaze or audio. Provide a deterministic synthetic preview and validate on Android and iOS. Requested by Doug; queued, not deployed.
 - [ ] Active-speaker gaze: establish hardware feasibility, then subtle smooth attention with neutral fallback. Validate two speakers and ambiguous/off-camera speech; largest face alone is not speaker evidence.
