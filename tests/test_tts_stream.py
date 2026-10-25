@@ -77,6 +77,22 @@ class SegmentStreamTests(unittest.IsolatedAsyncioTestCase):
 
 
 class SpeechRateTests(unittest.TestCase):
+    def test_phonemizer_never_receives_emoji_even_on_direct_speech(self):
+        from types import SimpleNamespace
+        seen = []
+        def pipeline(text, **kwargs):
+            seen.append(text)
+            return iter(())
+        engine = SpeechEngine()
+        engine.model = SimpleNamespace(_get_pipeline=lambda _: pipeline)
+        try:
+            list(engine.synthesize_segments('One piece. 😁 👍🏽 🇺🇸 1️⃣'))
+            list(engine.synthesize_segments('👨‍👩‍👧‍👦'))
+            list(engine.synthesize_segments('Take 1 piece. Do not take 2.'))
+        finally:
+            engine.executor.shutdown()
+        self.assertEqual(seen, ['One piece.', 'Take 1 piece. Do not take 2.'])
+
     def test_configurable_rate_and_invalid_values(self):
         for rate in (1.05, 1.12):
             engine=SpeechEngine(speed=rate)

@@ -6,4 +6,5 @@ uvicorn==0.38.0
 # preshed 3.0.14 fails spaCy tokenizer roundtrip on this host.
 preshed==3.0.10
 spacy==3.8.16
+regex==2026.9.29
 en-core-web-sm @ https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl

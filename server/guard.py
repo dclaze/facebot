@@ -1,5 +1,6 @@
 """Conservative output checks. These reduce risk, not a safety guarantee."""
 import re
+from server.spoken_text import spoken_text
 from pipecat.frames.frames import LLMFullResponseStartFrame, LLMFullResponseEndFrame, LLMTextFrame, InterruptionFrame
 from pipecat.processors.frame_processor import FrameProcessor
 
@@ -9,7 +10,7 @@ UNSUITABLE = re.compile(r'\b(fuck\w*|shit\w*|bitch\w*|sex\w*|porn\w*|suicid\w*|k
 PRIVATE = re.compile(r'https?://|www\.|@|\d{3}[- .]?\d{3}[- .]?\d{4}', re.I)
 
 def checked_reply(text):
-    text = text.strip()
+    text = spoken_text(text)
     if not text or len(text) > 240 or len(text.split()) > 35 or UNSUITABLE.search(text) or PRIVATE.search(text):
         return FALLBACK
     return text

@@ -6,6 +6,7 @@ import numpy as np
 from mlx_audio.tts.utils import load_model
 from pipecat.frames.frames import TTSAudioRawFrame, OutputTransportMessageFrame
 from server.visemes import cues
+from server.spoken_text import spoken_text
 from pipecat.services.tts_service import TTSService
 from pipecat.services.settings import TTSSettings
 
@@ -21,6 +22,9 @@ class SpeechEngine:
         self.model = None
 
     def synthesize_segments(self, text):
+        text = spoken_text(text)
+        if not text:
+            return
         # One worker owns model operations, including generator advancement/close.
         if self.model is None:
             self.model = load_model(self.model_name)
