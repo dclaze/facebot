@@ -18,7 +18,7 @@ Facebot is a planned open-source, locally powered Halloween character: a tablet 
 - Optional candy-bowl commentary that encourages one piece per visitor.
 - Reliable operation for a 12-hour event.
 
-The intended setup is a tablet on a stand, optionally inside a costume, connected to a local Mac server. iPadOS, Android, and a browser client are being evaluated. The tablet platform, models, and application architecture have not been selected.
+The intended setup is a tablet on a stand, optionally inside a costume, connected to a local Mac server. Both iOS/iPadOS and Android are target platforms, with physical-device validation required for each. A shared browser client and native clients are being evaluated; models and application architecture have not been selected.
 
 ## Responsiveness is a core requirement
 

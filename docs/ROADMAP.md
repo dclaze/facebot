@@ -4,7 +4,7 @@ The project remains in planning. These milestones describe intended work, not im
 
 ## 0. Agree on the installation
 
-Choose the tablet, client approach, camera/bowl geometry, character, voice criteria, and expected crowd behavior. Keep development and runtime within the budget. Treat the Mac and tablet as existing hardware; electrical and hardware costs are separate from the digital budget.
+Identify the Android and iOS test devices and choose the client approach, camera/bowl geometry, character, voice criteria, and expected crowd behavior. Both platforms must work on physical hardware. Keep development and runtime within the budget. Treat the Mac and tablets as existing hardware; electrical and hardware costs are separate from the digital budget.
 
 ## 1. Prove responsive local speech
 
