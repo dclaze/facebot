@@ -1,7 +1,7 @@
 import unittest
 from unittest.mock import AsyncMock
 
-from pipecat.frames.frames import LLMContextFrame, TTSSpeakFrame, LLMTextFrame, LLMFullResponseEndFrame
+from pipecat.frames.frames import LLMContextFrame, TTSSpeakFrame, LLMTextFrame, LLMFullResponseEndFrame, OutputTransportMessageFrame
 from pipecat.processors.aggregators.llm_context import LLMContext
 from pipecat.processors.frame_processor import FrameDirection
 from server.guard import checked_reply, FALLBACK, ReplyGuard
@@ -50,7 +50,15 @@ class ReplyQualityTests(unittest.IsolatedAsyncioTestCase):
         await processor.process_frame(question, FrameDirection.DOWNSTREAM)
         reply = processor.push_frame.call_args.args[0]
         self.assertIsInstance(reply, TTSSpeakFrame)
-        self.assertIn('One piece per person', reply.text)
+        self.assertEqual(reply.text, 'ONE ONLY, PLEASE!')
+        expression = processor.push_frame.call_args_list[0].args[0]
+        self.assertIsInstance(expression, OutputTransportMessageFrame)
+        self.assertEqual(expression.message, {'type':'expression', 'name':'scared', 'duration_ms':1200})
+        processor.push_frame.reset_mock()
+        ordinary = LLMContextFrame(LLMContext([{'role':'user', 'content':'How many pieces can I have?'}]))
+        await processor.process_frame(ordinary, FrameDirection.DOWNSTREAM)
+        processor.push_frame.assert_awaited_once()
+        self.assertEqual(processor.push_frame.call_args.args[0].text, 'One piece per person, please.')
         other = LLMContextFrame(LLMContext([{'role':'user', 'content':'Tell me a joke.'}]))
         await processor.process_frame(other, FrameDirection.DOWNSTREAM)
         self.assertIs(processor.push_frame.call_args.args[0], other)
