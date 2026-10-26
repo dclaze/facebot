@@ -32,6 +32,7 @@ from server.scene import SceneState
 from server.timing import StageTiming
 from server.recording import InteractionRecorder, RecordingTap
 from server.hearing import HearingRepair
+from server.prepared_conversation import PreparedConversation
 from server import settings
 from server.profiles import active
 from server.context_budget import ContextBudget, BudgetedContext
@@ -228,7 +229,7 @@ def create_app(token, engine=None):
             video_enabled = bool({'performance_video_v1','performance-video-v1'} & {x.strip() for x in ws.headers.get('x-facebot-capabilities','').split(',')})
             interaction.performance_video_enabled = video_enabled
             current_quips = OwnerQuips(interaction, mark=timing.mark)
-            pipeline = Pipeline([transport.input(), stt, RecordingTap(recorder, "input"), FrameTrace(name="after_stt", timing=timing), VisitorControl(interaction), pair.user(), ProactiveTurn(interaction, context, vision=vision, quips=quips), robin_request, SoundEffectRequest(sound_bank, interaction, mark=timing.mark, name_provider=lambda: settings.read()['character_name'], performance=performance), VisualReaction(interaction, mark=timing.mark), HearingRepair(name=active()['character_profile']['defaults']['character_name'], mark=timing.mark, name_provider=lambda: settings.read()['character_name']), FrameTrace(name="before_llm", scene=scene, timing=timing, vision=vision), BudgetedContext(context_budget, timing), llm, FrameTrace(name="after_llm", timing=timing), RobinIntentReply(robin_request), ReplyGuard(is_silenced=lambda: scene.encounter.silenced),
+            pipeline = Pipeline([transport.input(), stt, RecordingTap(recorder, "input"), FrameTrace(name="after_stt", timing=timing), VisitorControl(interaction), pair.user(), ProactiveTurn(interaction, context, vision=vision, quips=quips), robin_request, SoundEffectRequest(sound_bank, interaction, mark=timing.mark, name_provider=lambda: settings.read()['character_name'], performance=performance), VisualReaction(interaction, mark=timing.mark), HearingRepair(name=active()['character_profile']['defaults']['character_name'], mark=timing.mark, name_provider=lambda: settings.read()['character_name']), PreparedConversation(interaction, mark=timing.mark), FrameTrace(name="before_llm", scene=scene, timing=timing, vision=vision), BudgetedContext(context_budget, timing), llm, FrameTrace(name="after_llm", timing=timing), RobinIntentReply(robin_request), ReplyGuard(is_silenced=lambda: scene.encounter.silenced, record=recorder.event),
                                  AutomaticSoundDirector(performance), RecordingTap(recorder, "reply"), current_quips, LocalTTS(engine, timing=timing), RobinSkitPlayback(robin_skit, interaction, mark=timing.mark, video_enabled=video_enabled), SoundEffectPlayback(sound_bank, interaction, mark=timing.mark, performance=performance), FrameTrace(name="after_tts", timing=timing), transport.output(), pair.assistant()])
             # Visitor encounters can be separated by long quiet periods.
             # Socket disconnect/app lifecycle still cancels this worker.

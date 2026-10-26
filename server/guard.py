@@ -2,6 +2,7 @@
 import re
 from server.spoken_text import spoken_text
 from server.reactions import parse_reply
+from server.reply_quality import quality_reason, REPAIR
 from pipecat.frames.frames import LLMFullResponseStartFrame, LLMFullResponseEndFrame, LLMTextFrame, InterruptionFrame, OutputTransportMessageFrame
 from pipecat.processors.frame_processor import FrameProcessor
 
@@ -17,13 +18,16 @@ def checked_reply(text):
         return FALLBACK
     if len(text) > 240 or len(text.split()) > 32:
         return LENGTH_FALLBACK
+    if quality_reason(text):
+        return REPAIR
     return text
 
 class ReplyGuard(FrameProcessor):
-    def __init__(self, is_silenced=lambda: False):
+    def __init__(self, is_silenced=lambda: False, record=None):
         super().__init__()
         self.text = ''
         self.is_silenced = is_silenced
+        self.record = record
     async def process_frame(self, frame, direction):
         await super().process_frame(frame, direction)
         if isinstance(frame, (LLMFullResponseStartFrame, InterruptionFrame)):
@@ -35,7 +39,15 @@ class ReplyGuard(FrameProcessor):
         if isinstance(frame, LLMFullResponseEndFrame):
             if not self.is_silenced():
                 safe = checked_reply(self.text)
-                if self.text.lstrip().startswith('{') and safe != FALLBACK:
+                if self.record:
+                    clean = spoken_text(self.text)
+                    reason = ('empty_or_invalid_format' if not clean else
+                              'family_or_private_content' if safe == FALLBACK else
+                              'length' if safe == LENGTH_FALLBACK else
+                              quality_reason(clean) or 'accepted')
+                    self.record('reply_guard_decision', reason=reason,
+                                characters=len(clean), words=len(clean.split()))
+                if self.text.lstrip().startswith('{') and safe not in (FALLBACK, LENGTH_FALLBACK, REPAIR):
                     try:
                         _, expression = parse_reply(self.text)
                         await self.push_frame(OutputTransportMessageFrame(message=expression), direction)

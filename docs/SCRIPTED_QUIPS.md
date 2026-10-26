@@ -100,3 +100,10 @@ integrate this branch's focused commit; do not restart over an active performanc
 Verify `/health.scripted_quips` and `/diagnostics.transcription` after integration.
 As of the audit's live check at 6:14 PM PDT, those fields were absent: source
 implementation was verified, but this feature was not yet active on that server.
+
+
+## Follow-up: incoherent live replies (October 25, 6:17 PM PDT)
+
+Latest retained receipts include an internal instruction spoken verbatim (log line2372), unfinished replies (2330,2341), and a literal sound command (2318). The live server still lacked the earlier quip/transcript changes at the follow-up check. One isolated synthetic local-model replay of “Can I take two candies?” returned “Sure, you can have two!” despite event instructions. Remaining replay requests were stopped; this is one example, not a quality benchmark.
+
+A narrow reply-quality check now replaces the observed instruction leaks and dangling fragments with a short clarification. It does not claim to identify every incoherent sentence. Candy-quantity requests receive an authored one-piece answer before the model, while health/ingredient/price questions and ordinary conversation remain on their existing paths. The guard emits numeric reason/length receipts through existing opt-in recording; raw rejected output is not retained separately.22focused tests pass, including the recorded failures, valid terse answers, original safety checks, model bypass, mute, and reason logging.
