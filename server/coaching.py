@@ -3,6 +3,7 @@ import json
 import os
 from pathlib import Path
 import tempfile
+from server.profiles import private_path
 
 DEFAULT_PATH = Path(__file__).resolve().parents[1] / '.local/night-coaching.json'
 MAX_RULES = 6
@@ -17,7 +18,8 @@ def validate(rules):
     return [r.strip() for r in rules]
 
 
-def read(path=DEFAULT_PATH):
+def read(path=None):
+    path = private_path("night-coaching.json") if path is None else path
     if not path.exists():
         return {'revision': 0, 'rules': [], 'history': []}
     if path.stat().st_size > 32768:
@@ -29,7 +31,8 @@ def read(path=DEFAULT_PATH):
     return data
 
 
-def save(rules, path=DEFAULT_PATH):
+def save(rules, path=None):
+    path = private_path("night-coaching.json") if path is None else path
     rules = validate(rules)
     old = read(path)
     data = {'revision': old['revision'] + 1, 'rules': rules,
@@ -47,7 +50,7 @@ def save(rules, path=DEFAULT_PATH):
     return data
 
 
-def prompt(path=DEFAULT_PATH):
+def prompt(path=None):
     try:
         data = read(path)
     except (OSError, ValueError, KeyError, TypeError):

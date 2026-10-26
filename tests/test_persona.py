@@ -1,4 +1,5 @@
 import unittest
+from unittest.mock import patch
 from server.persona import relevant_facts, bounded_context, instructions
 class PersonaTests(unittest.TestCase):
     def test_lore_is_relevant_and_bounded(self):
@@ -8,7 +9,8 @@ class PersonaTests(unittest.TestCase):
         self.assertLess(len(relevant_facts('mill valley dipsea train edison')), 500)
     def test_no_stale_lore_or_unbounded_history(self):
         messages=[{'role':'system','content':'old lore'}]+[{'role':'user','content':'candy'}]*20
-        result=bounded_context(messages)
+        with patch('server.persona.coaching_prompt', return_value=None):
+            result=bounded_context(messages)
         self.assertEqual(len(result),7)
         self.assertNotIn('old lore', str(result))
     def test_owner_name_is_data_not_instruction(self):

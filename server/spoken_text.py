@@ -1,6 +1,7 @@
 """Remove non-spoken presentation cues before a phonemizer can name them."""
 import re
 import regex
+from server.reactions import parse_reply
 
 # Match complete graphemes so skin tones, flags, keycaps and ZWJ families
 # disappear together. Digits by themselves remain ordinary spoken text.
@@ -12,6 +13,11 @@ DIRECTION = re.compile(
 
 
 def spoken_text(text: str) -> str:
+    if text.lstrip().startswith(('{', '[{', '```')):
+        try:
+            text, _ = parse_reply(text)
+        except (ValueError, TypeError, KeyError):
+            return ''
     text = ''.join(g for g in regex.findall(r'\X', text) if not EMOJI.search(g))
     text = DIRECTION.sub(' ', text)
     # Strip formatting, preserving emphasized words and useful parentheticals.

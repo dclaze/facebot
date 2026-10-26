@@ -69,18 +69,26 @@ class VisitorControl(FrameProcessor):
 
 class ProactiveTurn(FrameProcessor):
     """After user aggregation; shares its context but never invents a user turn."""
-    def __init__(self, state, context):
+    def __init__(self, state, context, vision=None):
         super().__init__()
         self.state, self.context = state, context
+        self.vision = vision
         self._ticker = None
 
     async def tick(self):
         state = self.state
         if state.clock() < state.quiet_until:
             return
-        event = state.scene.encounter.take_event(
+        free = not (state.scene.encounter.silenced or state.user_speaking or state.bot_speaking or state.response_pending)
+        event = state.scene.space.take_event() if free else None
+        event = event or state.scene.encounter.take_event(
             user_speaking=state.user_speaking,
             bot_speaking=state.bot_speaking or state.response_pending)
+        if (not event and self.vision and not state.scene.encounter.silenced
+                and not state.user_speaking and not state.bot_speaking and not state.response_pending
+                and state.scene.received_at is not None and state.clock()-state.scene.received_at < .75
+                and state.scene.faces):
+            event = self.vision.take_event()
         if event:
             state.response_pending = True
             frame = LLMContextFrame(self.context)

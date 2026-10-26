@@ -1,0 +1,15 @@
+# Skill: Robin Williams performance
+
+Ask “Is Robin Williams there?”, “Tell me about Robin Williams”, or “Play the Robin Williams skit”. Exact common requests use the local fast path. Other requests go through the normal conversation LLM, which can select the performance from references such as “Could the guy from Mrs Doubtfire visit?” or a clear conversational follow-up. No second model call is added.
+
+The complete sequence is the preserved spoken comedy skit, the verified Fish song introduction, then the 80-second lyric music video. The current combined package lasts about 116 seconds. This is a fictional AI tribute, not an authentic Robin Williams recording. Runtime files and source/hash receipts stay private in .local/skills/robin-williams-performance/. The original spoken package remains separately intact in .local/skills/robin-williams/.
+
+server/robin_intent.py intercepts only a complete PLAY_ROBIN_WILLIAMS model response before the existing reply guard. Normal responses still receive the existing checks. Negations, incidental mentions, quoted commands, camera events and known unrelated Robins cannot start the show. Internal action text is never spoken. Three seconds between requests suppresses duplicate final transcripts; later requests can replay. A muted face stays muted; stop and interruption use the existing native epoch flush.
+
+server/robin_performance.py preloads the checksum-bound MP4 at the start of the spoken portion. The video becomes visible at the future song-start sample offset. Its audio is muted: mono 24 kHz PCM is the sole soundtrack and the native playback clock controls video position. Mouth/caption metadata is chunked into 20-second packets, with relative cues and serializer-owned absolute offsets. Captions retain the original skit's verified boundaries and add the transition and song intervals. Envelope mouth animation is not phoneme alignment.
+
+Android advertises X-Facebot-Capabilities: performance_video_v1. Only opted-in clients receive performance_video controls; older clients stay connected with audio/face/captions. iOS video is deferred per owner direction. The paired authenticated media endpoint serves only the configured immutable SHA filename, supports byte ranges, verifies integrity and never fetches external URLs. Missing or altered full-performance assets fail closed.
+
+The owner-only POST /skills/robin-williams/preview accepts the paired Bearer token and queues a synthetic request to an unmuted idle connected face. It is a verification/preview route, not evidence of microphone recognition. It cannot interrupt an active visitor turn. The optional utterance query parameter exercises semantic selection; default is “Is Robin Williams there?”.
+
+Repackage verified source receipts with scripts/package-robin-performance.py, then run focused routing/media/transport checks before an idle-boundary voice reload. Coordinate the native APK install with the video/caption owner; do not duplicate native changes. The exact deployment and physical verification receipt belongs in STATUS.md.

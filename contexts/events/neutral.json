@@ -1,0 +1,12 @@
+{
+  "id": "neutral",
+  "character": "host",
+  "instructions": "Welcome visitors and respond to their questions. No special location, occasion or station is configured.",
+  "facts": [],
+  "arrival": [
+    "Hello. Welcome.",
+    "pleased"
+  ],
+  "arrival_instruction": "Give one brief welcoming greeting to the visible audience.",
+  "visual_reactions": {}
+}

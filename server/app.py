@@ -1,8 +1,8 @@
-"""One local ghost. Run with FACEBOT_TOKEN and python -m server.app.
+"""One local character. Run with FACEBOT_TOKEN and python -m server.app.
 
 Development transport defaults to loopback. LAN use requires explicit TLS
 certificate/key arguments; never send the pairing token or visitor audio over
-an unencrypted LAN socket. No raw media/transcript logging is configured.
+an unencrypted LAN socket. Private local recording requires explicit owner configuration.
 """
 import argparse
 import asyncio
@@ -27,19 +27,31 @@ from pipecat.turns.user_stop.speech_timeout_user_turn_stop_strategy import Speec
 from server.protocol import FaceSerializer
 from server.tts import SpeechEngine, LocalTTS
 from server.guard import ReplyGuard
-from server.hearing import HearingRepair
-from server.context_budget import ContextBudget, BudgetedContext
 from server.persona import instructions, bounded_context
 from server.scene import SceneState
 from server.timing import StageTiming
+from server.recording import InteractionRecorder, RecordingTap
+from server.hearing import HearingRepair
+from server import settings
+from server.profiles import active
+from server.context_budget import ContextBudget, BudgetedContext
 from server.interaction import InteractionState, VisitorControl, ProactiveTurn
+from server.vision import VisionState, ImageLabeler
+from server.visual_reactions import VisualReaction
+from server.sound_effects import SoundBank, SoundEffectRequest, SoundEffectPlayback
+from server.robin_skit import RobinSkitRequest
+from server.robin_performance import RobinPerformance as RobinSkit, RobinPerformancePlayback as RobinSkitPlayback, add_media_route
+from server.robin_intent import RobinIntentReply
+from server.sound_performance import SoundPerformance, AutomaticSoundDirector, load_performance
 from pipecat.processors.frame_processor import FrameProcessor
+from pipecat.frames.frames import LLMContextFrame
 
 class FrameTrace(FrameProcessor):
-    def __init__(self, scene=None, timing=None, **kwargs):
+    def __init__(self, scene=None, timing=None, vision=None, **kwargs):
         super().__init__(**kwargs)
         self.timing = timing
         self.scene = scene
+        self.vision = vision
         self.encounter_generation = scene.encounter.generation if scene else 0
 
     async def process_frame(self, frame, direction):
@@ -53,20 +65,22 @@ class FrameTrace(FrameProcessor):
                 'after_tts': {'TTSAudioRawFrame':'first_pcm'},
             }
             stage = stages.get(self.name, {}).get(kind)
-            if stage: self.timing.mark(stage)
+            if stage and not getattr(frame,'sound_effect',False): self.timing.mark(stage)
         if type(frame).__name__ == "LLMContextFrame" and self.name == "before_llm":
             source = frame.context.get_messages()
             if self.scene and self.encounter_generation != self.scene.encounter.generation:
                 # Preserve only the new triggering utterance, not another group's history.
                 source = source[-1:] if source and source[-1].get('role') == 'user' and not getattr(frame, 'scene_event', None) else []
                 self.encounter_generation = self.scene.encounter.generation
-            messages = bounded_context(source, os.environ.get("FACEBOT_NAME", "Boo"))
+            messages = bounded_context(source, settings.read()['character_name'])
             if self.scene:
                 messages.insert(1, {'role': 'system', 'content': self.scene.context()})
+            if self.vision and self.vision.context():
+                messages.insert(2, {'role': 'system', 'content': self.vision.context()})
             if getattr(frame, 'scene_event', None):
                 messages.append({'role': 'system', 'content':
                     'EVENT: stable_visual_arrival. This is a camera event, not visitor speech. '
-                    'Initiate one brief, witty welcome to the visible audience at the Halloween table. '
+                    + active()['arrival_instruction'] + ' '
                     'Do not imply recognition, identify costumes or invent actions. '
                     'Do not require a name or repeat an introduction. Keep it under 15 words.'})
             frame.context.set_messages(messages)
@@ -82,43 +96,99 @@ def create_app(token, engine=None):
         raise ValueError('FACEBOT_TOKEN must contain at least 24 characters')
     if os.environ.get('FACEBOT_LLM', 'qwen2.5:1.5b') not in ('qwen2.5:1.5b', 'qwen3.5:9b', 'qwen3:1.7b'):
         raise ValueError('Choose an evaluated local model; cloud model routing is disabled')
-    instructions(os.environ.get("FACEBOT_NAME", "Boo"))
-    engine = engine or SpeechEngine(voice=os.environ.get("FACEBOT_VOICE", "af_heart"), speed=float(os.environ.get("FACEBOT_SPEECH_RATE", "1.12")))
+    instructions(settings.read()["character_name"])
+    if engine is None:
+        backend = os.environ.get('FACEBOT_TTS', 'kokoro')
+        if backend == 'qwen3':
+            from server.expressive_tts import ExpressiveSpeechEngine
+            engine = ExpressiveSpeechEngine(voice=os.environ.get('FACEBOT_EXPRESSIVE_VOICE', 'Aiden'),
+                speed=float(os.environ.get('FACEBOT_SPEECH_RATE', '1.18')), live_settings=True)
+        elif backend == 'kokoro':
+            engine = SpeechEngine(voice=os.environ.get("FACEBOT_VOICE", active()["character_profile"]["voice"]), speed=float(os.environ.get("FACEBOT_SPEECH_RATE", "1.18")), live_settings=True)
+        else:
+            raise ValueError('Choose local TTS: kokoro or qwen3')
     occupied = asyncio.Lock()
     current_interaction = None
+    current_task = None
+    current_quips = None
+    recorder = InteractionRecorder.configured()
     timing = StageTiming()
+    sound_bank = SoundBank()
+    robin_skit = RobinSkit()
+    sound_performance_config = load_performance(active()['id'], sound_bank)
     if os.environ.get("FACEBOT_LLM", "qwen2.5:1.5b") != "qwen2.5:1.5b":
         raise ValueError("Install and verify the selected model tokenizer before changing the runtime model")
     context_budget = ContextBudget()
+    vision = VisionState()
+    labeler = ImageLabeler(vision)
+    vision_occupied = asyncio.Lock()
     @asynccontextmanager
     async def lifespan(app):
         # Startup warm-up is synthetic and not a visitor-latency measurement.
-        await engine.render('One piece, darling. My haunting budget is tiny.')
+        await engine.render(active()['arrival'][0])
         yield
+        recorder.close()
+        await labeler.close()
         engine.executor.shutdown(wait=True, cancel_futures=True)
 
     app = FastAPI(lifespan=lifespan, docs_url=None, redoc_url=None)
+    add_media_route(app, robin_skit, token)
+    from server.owner_quips import OwnerQuips, add_routes as add_quip_routes
+    add_quip_routes(app, token, lambda: current_quips)
 
     @app.get('/health')
     async def health():
-        return {'status':'ready', 'occupied':occupied.locked(), 'protocol':1}
+        return {'status':'ready', 'occupied':occupied.locked(), 'protocol':1, 'profile':active()['id'], 'robin_skit':robin_skit.report(),
+                'tts':{'backend':'qwen3' if getattr(engine, 'supports_emotion', False) else 'kokoro', 'model':engine.model_name, 'voice':engine.voice,
+                       'emotion_controls':getattr(engine, 'supports_emotion', False)},
+                'sound_effects':{'types':len(sound_bank.effects),'clips':len(sound_bank.pcm), 'automatic':sound_performance_config is not None, 'routing_version':2}}
+
+    @app.get('/runtime-settings')
+    async def runtime_settings(authorization: str = Header(default='')):
+        if not hmac.compare_digest(authorization, 'Bearer ' + token):
+            raise HTTPException(status_code=403)
+        from fastapi.responses import JSONResponse
+        rate = engine.last_synthesized_rate
+        return JSONResponse({**settings.presentation(),
+                             'last_synthesized_rate': rate if type(rate) in (int, float) else None},
+                            headers={'Cache-Control': 'no-store'})
 
     @app.get('/diagnostics')
     async def diagnostics(authorization: str = Header(default='')):
         if not hmac.compare_digest(authorization, 'Bearer ' + token):
             raise HTTPException(status_code=403)
         report = timing.report()
+        report['recording'] = recorder.report()
+        report['sound_effects'] = current_interaction.sound_performance.report() if current_interaction else None
         report['voice_state'] = ({
             'silenced': current_interaction.scene.encounter.silenced,
             'user_speaking': current_interaction.user_speaking,
             'bot_speaking': current_interaction.bot_speaking,
             'response_pending': current_interaction.response_pending,
+            'performance_video_enabled': getattr(current_interaction,'performance_video_enabled',False),
         } if current_interaction else None)
         return report
 
+    @app.post('/skills/robin-williams/preview')
+    async def preview_robin(utterance: str = 'Is Robin Williams there?', authorization: str = Header(default='')):
+        if not hmac.compare_digest(authorization, 'Bearer ' + token):
+            raise HTTPException(status_code=403)
+        if not current_task or not current_interaction:
+            raise HTTPException(status_code=409, detail='No connected face')
+        if (current_interaction.scene.encounter.silenced or current_interaction.user_speaking
+                or current_interaction.bot_speaking or current_interaction.response_pending):
+            raise HTTPException(status_code=409, detail='Wait for an unmuted idle face')
+        if not isinstance(utterance,str) or not 1 <= len(utterance.strip()) <= 180:
+            raise HTTPException(status_code=422, detail='Preview utterance must be 1-180 characters')
+        if not robin_skit.pcm:
+            raise HTTPException(status_code=409, detail='Performance unavailable')
+        recorder.event('owner_performance_preview')
+        await current_task.queue_frame(LLMContextFrame(LLMContext([{'role':'user','content':utterance}])))
+        return {'status':'queued','evidence':'synthetic owner preview, not microphone recognition'}
+
     @app.websocket('/voice')
     async def voice(ws: WebSocket):
-        nonlocal current_interaction
+        nonlocal current_interaction, current_task, current_quips
         supplied = ws.headers.get('authorization', '')
         if not hmac.compare_digest(supplied, 'Bearer ' + token):
             await ws.close(code=1008)
@@ -130,13 +200,15 @@ def create_app(token, engine=None):
             await ws.accept()
             scene = SceneState()
             interaction = InteractionState(scene)
+            performance = SoundPerformance(sound_bank, interaction, sound_performance_config)
+            interaction.sound_performance = performance
             current_interaction = interaction
-            codec = FaceSerializer(on_scene=scene.update)
+            codec = FaceSerializer(on_scene=scene.update, recorder=recorder)
             transport = FastAPIWebsocketTransport(ws, FastAPIWebsocketParams(
                 audio_in_enabled=True, audio_out_enabled=True,
                 audio_in_sample_rate=16000, audio_out_sample_rate=24000,
                 serializer=codec, allowed_origins=[]))
-            context = LLMContext([{'role':'system','content':instructions(os.environ.get('FACEBOT_NAME', 'Boo'))}])
+            context = LLMContext([{'role':'system','content':instructions(settings.read()['character_name'])}])
             pair = LLMContextAggregatorPair(context, user_params=LLMUserAggregatorParams(
                 vad_analyzer=SileroVADAnalyzer(params=VADParams(start_secs=.1, stop_secs=.25)),
                 user_turn_strategies=UserTurnStrategies(stop=[SpeechTimeoutUserTurnStopStrategy(user_speech_timeout=.25)])))
@@ -146,12 +218,17 @@ def create_app(token, engine=None):
                 model=os.environ.get('FACEBOT_LLM','qwen2.5:1.5b'),
                 max_completion_tokens=64, temperature=.7,
                 extra={'extra_body':{'think':False}}))
-            pipeline = Pipeline([transport.input(), stt, FrameTrace(name="after_stt", timing=timing), VisitorControl(interaction), pair.user(), ProactiveTurn(interaction, context), HearingRepair(os.environ.get("FACEBOT_NAME", "Boo"), mark=timing.mark), FrameTrace(name="before_llm", scene=scene, timing=timing), BudgetedContext(context_budget, timing), llm, FrameTrace(name="after_llm", timing=timing), ReplyGuard(is_silenced=lambda: scene.encounter.silenced),
-                                 LocalTTS(engine, timing=timing), FrameTrace(name="after_tts", timing=timing), transport.output(), pair.assistant()])
-            # Halloween encounters can be separated by long quiet periods.
+            robin_request = RobinSkitRequest(robin_skit, interaction, mark=timing.mark, name_provider=lambda: settings.read()['character_name'], performance=performance)
+            video_enabled = bool({'performance_video_v1','performance-video-v1'} & {x.strip() for x in ws.headers.get('x-facebot-capabilities','').split(',')})
+            interaction.performance_video_enabled = video_enabled
+            current_quips = OwnerQuips(interaction, mark=timing.mark)
+            pipeline = Pipeline([transport.input(), stt, RecordingTap(recorder, "input"), FrameTrace(name="after_stt", timing=timing), VisitorControl(interaction), pair.user(), ProactiveTurn(interaction, context, vision=vision), robin_request, SoundEffectRequest(sound_bank, interaction, mark=timing.mark, name_provider=lambda: settings.read()['character_name'], performance=performance), VisualReaction(interaction, mark=timing.mark), HearingRepair(name=active()['character_profile']['defaults']['character_name'], mark=timing.mark, name_provider=lambda: settings.read()['character_name']), FrameTrace(name="before_llm", scene=scene, timing=timing, vision=vision), BudgetedContext(context_budget, timing), llm, FrameTrace(name="after_llm", timing=timing), RobinIntentReply(robin_request), ReplyGuard(is_silenced=lambda: scene.encounter.silenced),
+                                 AutomaticSoundDirector(performance), RecordingTap(recorder, "reply"), current_quips, LocalTTS(engine, timing=timing), RobinSkitPlayback(robin_skit, interaction, mark=timing.mark, video_enabled=video_enabled), SoundEffectPlayback(sound_bank, interaction, mark=timing.mark, performance=performance), FrameTrace(name="after_tts", timing=timing), transport.output(), pair.assistant()])
+            # Visitor encounters can be separated by long quiet periods.
             # Socket disconnect/app lifecycle still cancels this worker.
             task = PipelineTask(pipeline, params=PipelineParams(), enable_rtvi=False,
                                 idle_timeout_secs=None)
+            current_task = task
             @transport.event_handler('on_client_disconnected')
             async def disconnected(transport, websocket):
                 await task.cancel()
@@ -159,10 +236,44 @@ def create_app(token, engine=None):
                 await PipelineRunner(handle_sigint=False).run(task)
             except Exception:
                 # Framework exceptions can contain text; keep runtime log content-free.
+                recorder.event('voice_session_failed')
                 logger.warning('Voice session failed; connection closed')
                 await ws.close(code=1011)
             finally:
                 current_interaction = None
+                current_task = None
+                current_quips = None
+    @app.get('/vision/diagnostics')
+    async def vision_diagnostics(authorization: str = Header(default='')):
+        if not hmac.compare_digest(authorization, 'Bearer ' + token):
+            raise HTTPException(status_code=403)
+        return vision.report()
+
+    @app.websocket('/vision')
+    async def visual_stream(ws: WebSocket):
+        if not hmac.compare_digest(ws.headers.get('authorization', ''), 'Bearer ' + token):
+            await ws.close(code=1008)
+            return
+        if vision_occupied.locked():
+            await ws.close(code=1013)
+            return
+        async with vision_occupied:
+            await ws.accept()
+            try:
+                while True:
+                    packet = await ws.receive_bytes()
+                    if not 5 <= len(packet) <= 256004:
+                        await ws.close(code=1009)
+                        return
+                    age_ms = int.from_bytes(packet[:4], 'big')
+                    try:
+                        await labeler.label(packet[4:], age_ms)
+                    except Exception:
+                        # No exception contents: image/model response may contain scene data.
+                        vision.errors += 1
+                    await ws.send_json(vision.report())
+            except Exception:
+                pass  # Connection closure must never tear down the voice pipeline.
     return app
 
 
@@ -180,7 +291,7 @@ def main():
     logger.add(sys.stderr, level='WARNING')
     import uvicorn
     uvicorn.run(create_app(os.environ.get('FACEBOT_TOKEN','')), host=args.host, port=args.port,
-                ssl_certfile=args.cert, ssl_keyfile=args.key, access_log=False, ws_max_size=4096,
+                ssl_certfile=args.cert, ssl_keyfile=args.key, access_log=False, ws_max_size=256004,
                 ws_max_queue=8)
 
 if __name__ == '__main__':

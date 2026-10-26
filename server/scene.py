@@ -1,18 +1,21 @@
 """Ephemeral observations only; never infer a complete headcount from faces."""
 import time
 from server.encounter import EncounterState
+from server.personal_space import PersonalSpace
 
 
 class SceneState:
     def __init__(self, clock=time.monotonic):
         self.clock = clock
         self.encounter = EncounterState(clock)
+        self.space = PersonalSpace(clock)
         self.received_at = None
         self.faces = None
         self.overflow = False
         self.age_ms = 0
 
     def update(self, event):
+        self.space.observe(event.get('face_fill'), event['visible_faces'], event['age_ms'])
         self.encounter.observe(event['visible_faces'], event['age_ms'])
         self.faces = event['visible_faces']
         self.overflow = event.get('overflow', False)
@@ -27,5 +30,5 @@ class SceneState:
                 'This is uncertain and can miss people, not a complete headcount. '
                 'Use this observation naturally when relevant; address a group when multiple faces are detected. '
                 'Zero detected faces does not prove nobody is there. '
-                'No evidence yet identifies the speaker, furniture, seating, clothing, actions or candy counts. '
-                'Do not claim to see a couch or any other unsupported detail. Never identify people.')
+                'Face detection alone does not identify the speaker, objects, clothing, actions or object counts. '
+                'Use separately supplied fresh image labels for objects; never invent unsupported details or identify people.')

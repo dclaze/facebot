@@ -5,6 +5,43 @@ from pipecat.frames.frames import TTSAudioRawFrame, OutputTransportMessageFrame
 
 
 class SegmentStreamTests(unittest.IsolatedAsyncioTestCase):
+    async def test_cancellation_does_not_wait_for_inflight_inference(self):
+        import asyncio
+        import threading
+        engine = SpeechEngine.__new__(SpeechEngine)
+        engine.executor = ThreadPoolExecutor(max_workers=1)
+        loop = asyncio.get_running_loop()
+        entered = asyncio.Event()
+        release = threading.Event()
+        closed = threading.Event()
+        workers = []
+        def segments(text):
+            try:
+                workers.append(threading.get_ident())
+                loop.call_soon_threadsafe(entered.set)
+                release.wait(timeout=3)
+                yield b'\0'*960, []
+            finally:
+                workers.append(threading.get_ident())
+                closed.set()
+        engine.synthesize_segments = segments
+        stream = engine.stream('Synthetic blocked inference')
+        task = asyncio.create_task(anext(stream))
+        try:
+            await asyncio.wait_for(entered.wait(), timeout=1)
+            task.cancel()
+            done, _ = await asyncio.wait({task}, timeout=.1)
+            self.assertIn(task, done, 'Interruption must finish before inference is released')
+            with self.assertRaises(asyncio.CancelledError):
+                await task
+            self.assertFalse(closed.is_set())
+        finally:
+            release.set()
+            await asyncio.gather(task, return_exceptions=True)
+            engine.executor.shutdown(wait=True)
+        self.assertTrue(closed.is_set())
+        self.assertEqual(workers[0], workers[1])
+
     async def test_first_segment_is_available_before_second_is_synthesized(self):
         engine = SpeechEngine.__new__(SpeechEngine)
         engine.executor = ThreadPoolExecutor(max_workers=1)
