@@ -3,111 +3,111 @@
   "groups": {
     "arrival": [
       [
-        "An audience! My haunting finally has a purpose.",
+        "An audience! I can stop haunting myself.",
         "pleased"
       ],
       [
-        "Welcome! I died waiting for a good entrance.",
+        "Welcome! I dressed up as unpaid staff.",
         "pleased"
       ],
       [
-        "Come for the candy. Stay for my unresolved issues.",
+        "Free candy. My jokes cost your patience.",
         "skeptical"
       ],
       [
-        "Happy Halloween! The haunting is complimentary.",
+        "Happy Halloween! Management has abandoned this haunting.",
         "pleased"
       ],
       [
-        "Finally, guests who appreciate my lack of a body.",
+        "Finally, witnesses to my terrible jokes.",
         "pleased"
       ],
       [
-        "Welcome to my big break. Please ignore the cracks.",
+        "Welcome! I'm the employee of the afterlife.",
         "skeptical"
       ]
     ],
     "candy": [
       [
-        "Hey YOU! One candy per person, PLEASE!",
+        "One candy each. My only job requirement.",
         "surprised"
       ],
       [
-        "One piece each. Even monsters have to share.",
+        "One piece each. Even monsters must share.",
         "skeptical"
       ],
       [
-        "One candy per person. Extra arms do not count.",
+        "One candy each. Extra arms don't count.",
         "skeptical"
       ],
       [
-        "Take one treat. Leave the haunting to me.",
+        "One treat each. Leave the haunting to me.",
         "pleased"
       ],
       [
-        "One piece each, please. My accountant is a vampire.",
+        "One piece each. My boss is counting.",
         "skeptical"
       ],
       [
-        "One candy per person. Yes, ghosts count too.",
+        "One candy each. Yes, ghosts count too.",
         "pleased"
       ],
       [
-        "Please take one. Save some sugar for the next monster.",
+        "One each. Leave some for the next monster.",
         "pleased"
       ],
       [
-        "One treat apiece. This is a haunting, not a buffet.",
+        "One treat each. The ghost gets the leftovers.",
         "skeptical"
       ]
     ],
     "general": [
       [
-        "I used to have a life. Terrible hours.",
+        "Dead tired. Still working.",
         "skeptical"
       ],
       [
-        "Being a ghost is easy. Finding pants is the problem.",
+        "No body. Still paying rent.",
         "skeptical"
       ],
       [
-        "I applied for a job. They said I lacked substance.",
+        "I got ghosted. By another ghost.",
         "skeptical"
       ],
       [
-        "My skeleton quit. Said I worked him to the bone.",
+        "My skeleton quit. No backbone.",
         "surprised"
       ],
       [
-        "I haunt this place. The commute is excellent.",
+        "I work from home. I haunt it.",
         "pleased"
       ],
       [
-        "I tried lifting weights. They went right through me.",
+        "I lifted weights. They fell through me.",
         "skeptical"
       ],
       [
-        "My therapist says I need boundaries. Walls do nothing.",
+        "I need boundaries. Walls aren't helping.",
         "skeptical"
       ],
       [
-        "I am not lazy. I am conserving ectoplasm.",
+        "My job is dead boring.",
         "skeptical"
       ],
       [
-        "I tried a sheet costume. Everyone said I looked overdressed.",
+        "This sheet was my entire costume budget.",
         "skeptical"
       ],
       [
-        "The other ghosts started a band. I play dead.",
+        "Our ghost band plays dead.",
         "pleased"
       ],
       [
-        "I lost my train of thought. Probably haunted.",
+        "I forgot my lines. Again. Dead silence.",
         "skeptical"
       ],
       [
-        "I would offer a handshake. It gets awkward.",
+        "Handshakes are my biggest weakness.",
         "pleased"
       ]
     ],
@@ -117,53 +117,53 @@
         "skeptical"
       ],
       [
-        "That hat says magic. Mine just says laundry.",
+        "That hat says magic. Mine says laundry.",
         "pleased"
       ],
       [
-        "Excellent witch hat. Does it come with broom parking?",
+        "Nice witch hat. Is broom parking included?",
         "pleased"
       ]
     ],
     "cape": [
       [
-        "That cape has more dramatic range than I do.",
+        "That cape has more drama than me.",
         "skeptical"
       ],
       [
-        "A cape! Finally, someone dressed for an entrance.",
+        "A cape! Someone paid for the upgrade.",
         "pleased"
       ],
       [
-        "Nice cape. My sheet suddenly feels underqualified.",
+        "Nice cape. My sheet suddenly looks cheap.",
         "skeptical"
       ]
     ],
     "crown": [
       [
-        "A crown! I should have negotiated a better title.",
+        "A crown! My promotion must be lost.",
         "surprised"
       ],
       [
-        "Royalty! Please excuse my complete lack of a throne.",
+        "Royalty! My throne is a folding chair.",
         "pleased"
       ],
       [
-        "Nice crown. I was promoted to slightly haunted.",
+        "Nice crown. I got promoted to ghost.",
         "skeptical"
       ]
     ],
     "pirate hat": [
       [
-        "A pirate hat! Finally, someone who understands buried treasure.",
+        "A pirate hat! Hide my expired coupons.",
         "pleased"
       ],
       [
-        "Nice pirate hat. My treasure is mostly expired coupons.",
+        "Nice pirate hat. My treasure is loose change.",
         "skeptical"
       ],
       [
-        "A pirate! I tried sailing. Went straight through the deck.",
+        "A pirate! My boat went through me.",
         "skeptical"
       ]
     ],
@@ -173,85 +173,85 @@
         "pleased"
       ],
       [
-        "That skeleton outfit has excellent support. I miss that.",
+        "Nice skeleton costume. Mine quit years ago.",
         "skeptical"
       ],
       [
-        "A skeleton costume! You brought the framework; I brought the ghost.",
+        "A skeleton costume! I forgot my bones.",
         "pleased"
       ]
     ],
     "bat wings": [
       [
-        "Bat wings! I just float and hope for the best.",
+        "Bat wings! I float without a license.",
         "pleased"
       ],
       [
-        "Nice wings. Mine are still on back order.",
+        "Nice wings. Mine haven't arrived yet.",
         "skeptical"
       ],
       [
-        "Those wings really elevate the outfit. Literally, I hope.",
+        "Bat wings! My airline lost mine.",
         "pleased"
       ]
     ],
     "animal-ear headband": [
       [
-        "Nice ears. Mine disappeared with the rest of me.",
+        "Nice ears. Mine left with my body.",
         "pleased"
       ],
       [
-        "Excellent ears. Finally, someone equipped for my jokes.",
+        "Nice ears. Mine went missing.",
         "pleased"
       ]
     ],
     "robot helmet": [
       [
-        "A robot helmet! Finally, someone with a warranty.",
+        "Robot helmet! Finally, someone with a warranty.",
         "pleased"
       ],
       [
-        "Nice robot helmet. My last update was the afterlife.",
+        "Robot helmet! My last update was death.",
         "skeptical"
       ]
     ],
     "dinosaur costume": [
       [
-        "Dinosaur costume! Finally, someone with older problems than mine.",
+        "Dinosaur costume! Finally, someone older than my jokes.",
         "skeptical"
       ],
       [
-        "A dinosaur! I thought my act was prehistoric.",
+        "A dinosaur! My act is nearly that old.",
         "surprised"
       ]
     ],
     "ghost costume": [
       [
-        "Another ghost! Finally, someone understands the sheet situation.",
+        "Another ghost! Finally, someone understands laundry day.",
         "pleased"
       ],
       [
-        "A ghost costume! Careful, people might offer you my job.",
+        "Ghost costume! Please don't apply for my job.",
         "skeptical"
       ]
     ],
     "astronaut helmet": [
       [
-        "An astronaut helmet! I also have trouble staying grounded.",
+        "Astronaut helmet! My career needs a launch.",
         "pleased"
       ],
       [
-        "Space gear! My career could use a launch.",
+        "Space helmet! My career never left Earth.",
         "pleased"
       ]
     ],
     "butterfly wings": [
       [
-        "Butterfly wings! I am still waiting on my transformation.",
+        "Butterfly wings! My makeover was just a sheet.",
         "pleased"
       ],
       [
-        "Nice wings. My grand entrance is mostly drifting.",
+        "Nice wings. My entrance is mostly drifting.",
         "skeptical"
       ]
     ],
@@ -261,27 +261,27 @@
         "pleased"
       ],
       [
-        "Nice fairy wings. Do they come with frequent flyer points?",
+        "Fairy wings! My flights keep getting canceled.",
         "pleased"
       ]
     ],
     "magic wand": [
       [
-        "A magic wand! Could you make my rent disappear?",
+        "A wand! Please make my rent disappear.",
         "skeptical"
       ],
       [
-        "Nice wand. Mine only turns money into receipts.",
+        "Nice wand. Mine only makes more bills.",
         "skeptical"
       ]
     ],
     "pumpkin costume": [
       [
-        "A pumpkin costume! Finally, someone with seasonal job security.",
+        "Pumpkin costume! We both only work October.",
         "pleased"
       ],
       [
-        "Pumpkin outfit! I respect a strong seasonal brand.",
+        "Pumpkin outfit! Another temporary Halloween employee.",
         "pleased"
       ]
     ],
@@ -291,17 +291,17 @@
         "skeptical"
       ],
       [
-        "A shield! I could use that for bad reviews.",
+        "A shield! Can it block bad reviews?",
         "skeptical"
       ]
     ],
     "phone": [
       [
-        "A phone! My good side is whichever side is transparent.",
+        "A phone! Please get my invisible side.",
         "pleased"
       ],
       [
-        "Nice phone. My last selfie was just the background.",
+        "Nice phone. My selfies are just backgrounds.",
         "skeptical"
       ]
     ]
