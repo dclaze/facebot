@@ -96,6 +96,20 @@ class PerformanceTests(unittest.IsolatedAsyncioTestCase):
         await reply.process_frame(LLMFullResponseEndFrame(),D)
         self.assertEqual(reply.push_frame.call_args_list[1].args[0].text,'A normal reply.')
 
+    async def test_camera_event_during_generation_keeps_original_intent(self):
+        request=RobinSkitRequest(self.skit,self.state);request.push_frame=AsyncMock()
+        original=LLMContextFrame(LLMContext([{'role':'user','content':'Could Mrs Doubtfire visit us?'}]))
+        await request.process_frame(original,D)
+        reply=RobinIntentReply(request);reply.push_frame=AsyncMock()
+        await reply.process_frame(LLMFullResponseStartFrame(),D)
+        camera=LLMContextFrame(LLMContext([{'role':'user','content':'Could Mrs Doubtfire visit us?'}]))
+        camera.scene_event={'kind':'visual_labels'}
+        await request.process_frame(camera,D)
+        request.push_frame.reset_mock()
+        await reply.process_frame(LLMTextFrame(COMMAND),D)
+        await reply.process_frame(LLMFullResponseEndFrame(),D)
+        self.assertIsInstance(request.push_frame.call_args.args[0],RobinSkitFrame)
+
     async def test_action_punctuation_but_not_explanatory_prose(self):
         for action, expected in [('PLAY_ROBIN_WILLIAMS.',True), ('[PLAY_ROBIN_WILLIAMS]',True), ('"PLAY_ROBIN_WILLIAMS"',True), ('I could PLAY_ROBIN_WILLIAMS for you.',False)]:
             request=RobinSkitRequest(self.skit,self.state);request.push_frame=AsyncMock()

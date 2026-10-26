@@ -41,6 +41,7 @@ class RobinIntentReply(FrameProcessor):
         self.request = request
         self.text = ''
         self.start = None
+        self.candidate = None
 
     async def process_frame(self, frame, direction):
         await super().process_frame(frame, direction)
@@ -50,8 +51,14 @@ class RobinIntentReply(FrameProcessor):
         if isinstance(frame, InterruptionFrame):
             self.text, self.start = '', None
             self.request.intent_frame = None
+            self.candidate = None
         if isinstance(frame, LLMFullResponseStartFrame):
             self.text, self.start = '', frame
+            context = self.request.intent_frame
+            messages = context.context.get_messages() if context is not None else []
+            latest = messages[-1] if messages else {}
+            self.candidate = context if (context is not None and not getattr(context, 'scene_event', None)
+                and latest.get('role') == 'user' and eligible(latest.get('content'))) else None
             return
         if isinstance(frame, LLMTextFrame):
             self.text = (self.text + frame.text)[:1024]
@@ -59,14 +66,10 @@ class RobinIntentReply(FrameProcessor):
         if isinstance(frame, LLMFullResponseEndFrame):
             text, start = self.text.strip(), self.start
             self.text, self.start = '', None
-            context = self.request.intent_frame
+            context, self.candidate = self.candidate, None
             if text.upper().strip('`\"[] .!\n\t') == COMMAND and context is not None:
-                messages = context.context.get_messages()
-                latest = messages[-1] if messages else {}
-                if (not getattr(context, 'scene_event', None) and latest.get('role') == 'user'
-                        and eligible(latest.get('content'))):
-                    await self.request.dispatch(context, direction)
-                    return
+                await self.request.dispatch(context, direction)
+                return
             # Never speak internal command tokens, including malformed model output.
             if COMMAND in text.upper():
                 text = 'Would you like to hear the Robin Williams performance?'
