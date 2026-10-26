@@ -60,7 +60,7 @@ class RobinIntentReply(FrameProcessor):
             text, start = self.text.strip(), self.start
             self.text, self.start = '', None
             context = self.request.intent_frame
-            if text.upper() in (COMMAND, '[' + COMMAND + ']') and context is not None:
+            if text.upper().strip('`\"[] .!\n\t') == COMMAND and context is not None:
                 messages = context.context.get_messages()
                 latest = messages[-1] if messages else {}
                 if (not getattr(context, 'scene_event', None) and latest.get('role') == 'user'

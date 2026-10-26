@@ -96,6 +96,17 @@ class PerformanceTests(unittest.IsolatedAsyncioTestCase):
         await reply.process_frame(LLMFullResponseEndFrame(),D)
         self.assertEqual(reply.push_frame.call_args_list[1].args[0].text,'A normal reply.')
 
+    async def test_action_punctuation_but_not_explanatory_prose(self):
+        for action, expected in [('PLAY_ROBIN_WILLIAMS.',True), ('[PLAY_ROBIN_WILLIAMS]',True), ('"PLAY_ROBIN_WILLIAMS"',True), ('I could PLAY_ROBIN_WILLIAMS for you.',False)]:
+            request=RobinSkitRequest(self.skit,self.state);request.push_frame=AsyncMock()
+            frame=LLMContextFrame(LLMContext([{'role':'user','content':'Could Mrs Doubtfire visit us?'}]))
+            await request.process_frame(frame,D);request.push_frame.reset_mock()
+            reply=RobinIntentReply(request);reply.push_frame=AsyncMock()
+            await reply.process_frame(LLMFullResponseStartFrame(),D)
+            await reply.process_frame(LLMTextFrame(action),D)
+            await reply.process_frame(LLMFullResponseEndFrame(),D)
+            self.assertEqual(request.push_frame.called,expected,action)
+
     async def test_bad_llm_decision_cannot_play_for_mentions_scene_or_interrupt(self):
         for text,scene,interrupt in [('I loved Robin Williams movies.',False,False),('Can Robin Hood come here?',False,False),
                 ('Do not play Robin Williams.',False,False),('Could he visit?',True,False)]:
