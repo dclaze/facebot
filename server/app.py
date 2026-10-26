@@ -20,7 +20,7 @@ from pipecat.pipeline.task import PipelineTask, PipelineParams
 from pipecat.processors.aggregators.llm_context import LLMContext
 from pipecat.processors.aggregators.llm_response_universal import LLMContextAggregatorPair, LLMUserAggregatorParams
 from pipecat.services.ollama.llm import OLLamaLLMService
-from pipecat.services.whisper.stt import WhisperSTTServiceMLX
+from server.transcription import LocalSTT
 from pipecat.transports.websocket.fastapi import FastAPIWebsocketTransport, FastAPIWebsocketParams
 from pipecat.turns.user_turn_strategies import UserTurnStrategies
 from pipecat.turns.user_stop.speech_timeout_user_turn_stop_strategy import SpeechTimeoutUserTurnStopStrategy
@@ -38,6 +38,7 @@ from server.context_budget import ContextBudget, BudgetedContext
 from server.interaction import InteractionState, VisitorControl, ProactiveTurn
 from server.vision import VisionState, ImageLabeler
 from server.visual_reactions import VisualReaction
+from server.scripted_quips import QuipDirector, load_quips
 from server.sound_effects import SoundBank, SoundEffectRequest, SoundEffectPlayback
 from server.robin_skit import RobinSkitRequest
 from server.robin_performance import RobinPerformance as RobinSkit, RobinPerformancePlayback as RobinSkitPlayback, add_media_route
@@ -119,6 +120,8 @@ def create_app(token, engine=None):
     if os.environ.get("FACEBOT_LLM", "qwen2.5:1.5b") != "qwen2.5:1.5b":
         raise ValueError("Install and verify the selected model tokenizer before changing the runtime model")
     context_budget = ContextBudget()
+    quip_pack = load_quips(active()['id'])
+    quips = QuipDirector(quip_pack) if quip_pack else None
     vision = VisionState()
     labeler = ImageLabeler(vision)
     vision_occupied = asyncio.Lock()
@@ -138,7 +141,7 @@ def create_app(token, engine=None):
 
     @app.get('/health')
     async def health():
-        return {'status':'ready', 'occupied':occupied.locked(), 'protocol':1, 'profile':active()['id'], 'robin_skit':robin_skit.report(),
+        return {'status':'ready', 'occupied':occupied.locked(), 'protocol':1, 'profile':active()['id'], 'scripted_quips':quips.report() if quips else {'enabled':False}, 'robin_skit':robin_skit.report(),
                 'tts':{'backend':'qwen3' if getattr(engine, 'supports_emotion', False) else 'kokoro', 'model':engine.model_name, 'voice':engine.voice,
                        'emotion_controls':getattr(engine, 'supports_emotion', False)},
                 'sound_effects':{'types':len(sound_bank.effects),'clips':len(sound_bank.pcm), 'automatic':sound_performance_config is not None, 'routing_version':2}}
@@ -159,6 +162,8 @@ def create_app(token, engine=None):
             raise HTTPException(status_code=403)
         report = timing.report()
         report['recording'] = recorder.report()
+        report['transcription'] = current_interaction.stt.report() if current_interaction else None
+        report['scripted_quips'] = quips.report() if quips else {'enabled': False}
         report['sound_effects'] = current_interaction.sound_performance.report() if current_interaction else None
         report['voice_state'] = ({
             'silenced': current_interaction.scene.encounter.silenced,
@@ -210,10 +215,11 @@ def create_app(token, engine=None):
                 serializer=codec, allowed_origins=[]))
             context = LLMContext([{'role':'system','content':instructions(settings.read()['character_name'])}])
             pair = LLMContextAggregatorPair(context, user_params=LLMUserAggregatorParams(
-                vad_analyzer=SileroVADAnalyzer(params=VADParams(start_secs=.1, stop_secs=.25)),
+                vad_analyzer=SileroVADAnalyzer(params=VADParams(start_secs=.1, stop_secs=.45)),
                 user_turn_strategies=UserTurnStrategies(stop=[SpeechTimeoutUserTurnStopStrategy(user_speech_timeout=.25)])))
-            stt = WhisperSTTServiceMLX(settings=WhisperSTTServiceMLX.Settings(
+            stt = LocalSTT(recorder=recorder, settings=LocalSTT.Settings(
                 model='mlx-community/whisper-tiny.en-mlx'))
+            interaction.stt = stt
             llm = OLLamaLLMService(base_url='http://127.0.0.1:11434/v1', settings=OLLamaLLMService.Settings(
                 model=os.environ.get('FACEBOT_LLM','qwen2.5:1.5b'),
                 max_completion_tokens=64, temperature=.7,
@@ -222,7 +228,7 @@ def create_app(token, engine=None):
             video_enabled = bool({'performance_video_v1','performance-video-v1'} & {x.strip() for x in ws.headers.get('x-facebot-capabilities','').split(',')})
             interaction.performance_video_enabled = video_enabled
             current_quips = OwnerQuips(interaction, mark=timing.mark)
-            pipeline = Pipeline([transport.input(), stt, RecordingTap(recorder, "input"), FrameTrace(name="after_stt", timing=timing), VisitorControl(interaction), pair.user(), ProactiveTurn(interaction, context, vision=vision), robin_request, SoundEffectRequest(sound_bank, interaction, mark=timing.mark, name_provider=lambda: settings.read()['character_name'], performance=performance), VisualReaction(interaction, mark=timing.mark), HearingRepair(name=active()['character_profile']['defaults']['character_name'], mark=timing.mark, name_provider=lambda: settings.read()['character_name']), FrameTrace(name="before_llm", scene=scene, timing=timing, vision=vision), BudgetedContext(context_budget, timing), llm, FrameTrace(name="after_llm", timing=timing), RobinIntentReply(robin_request), ReplyGuard(is_silenced=lambda: scene.encounter.silenced),
+            pipeline = Pipeline([transport.input(), stt, RecordingTap(recorder, "input"), FrameTrace(name="after_stt", timing=timing), VisitorControl(interaction), pair.user(), ProactiveTurn(interaction, context, vision=vision, quips=quips), robin_request, SoundEffectRequest(sound_bank, interaction, mark=timing.mark, name_provider=lambda: settings.read()['character_name'], performance=performance), VisualReaction(interaction, mark=timing.mark), HearingRepair(name=active()['character_profile']['defaults']['character_name'], mark=timing.mark, name_provider=lambda: settings.read()['character_name']), FrameTrace(name="before_llm", scene=scene, timing=timing, vision=vision), BudgetedContext(context_budget, timing), llm, FrameTrace(name="after_llm", timing=timing), RobinIntentReply(robin_request), ReplyGuard(is_silenced=lambda: scene.encounter.silenced),
                                  AutomaticSoundDirector(performance), RecordingTap(recorder, "reply"), current_quips, LocalTTS(engine, timing=timing), RobinSkitPlayback(robin_skit, interaction, mark=timing.mark, video_enabled=video_enabled), SoundEffectPlayback(sound_bank, interaction, mark=timing.mark, performance=performance), FrameTrace(name="after_tts", timing=timing), transport.output(), pair.assistant()])
             # Visitor encounters can be separated by long quiet periods.
             # Socket disconnect/app lifecycle still cancels this worker.

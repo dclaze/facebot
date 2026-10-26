@@ -24,6 +24,17 @@ class VisualReaction(FrameProcessor):
     async def process_frame(self, frame, direction):
         await super().process_frame(frame, direction)
         event = getattr(frame, 'scene_event', None)
+        if isinstance(frame, LLMContextFrame) and event and event['kind'] == 'prepared_quip':
+            if (self.state.scene.encounter.silenced or self.state.user_speaking
+                    or self.state.bot_speaking or self.state.clock() > event['expires_at']):
+                self.state.response_pending = False
+                return
+            if self.mark:
+                self.mark('prepared_reply')
+            await self.push_frame(OutputTransportMessageFrame(message={
+                'type': 'expression', 'name': event['expression'], 'duration_ms': 1800}), direction)
+            await self.push_frame(TTSSpeakFrame(event['text']), direction)
+            return
         if isinstance(frame, LLMContextFrame) and event and event['kind'] in ('visual_labels', 'stable_visual_arrival', 'too_close', 'space_restored'):
             if self.state.scene.encounter.silenced:
                 self.state.response_pending = False

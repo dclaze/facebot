@@ -55,6 +55,18 @@
       ],
       "availability": "installed",
       "requires_robin_skit": true
+    },
+    {
+      "id": "scripted-quips",
+      "name": "Halloween quip rotation",
+      "description": "66 prepared lines: welcomes, camera-grounded costume jokes and eight one-candy reminders. Quiet when busy, absent or muted; conversation stays available.",
+      "examples": [
+        "Hey YOU! One candy per person, PLEASE!",
+        "One candy per person. Extra arms do not count.",
+        "A cape! Finally, someone dressed for an entrance."
+      ],
+      "availability": "installed",
+      "requires_quip_pack": true
     }
   ],
   "personalities": [

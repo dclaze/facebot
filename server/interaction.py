@@ -25,6 +25,7 @@ class InteractionState:
         self.bot_speaking = False
         self.response_pending = False
         self.quiet_until = 0.
+        self.last_activity = float('-inf')
 
     def observe_frame(self, frame):
         if isinstance(frame, (UserStartedSpeakingFrame, VADUserStartedSpeakingFrame)):
@@ -32,11 +33,13 @@ class InteractionState:
             self.scene.encounter.engaged()
         elif isinstance(frame, (UserStoppedSpeakingFrame, VADUserStoppedSpeakingFrame)):
             self.user_speaking = False
+            self.last_activity = self.clock()
             self.quiet_until = self.clock()+1.
         elif isinstance(frame, BotStartedSpeakingFrame):
             self.bot_speaking = True
         elif isinstance(frame, BotStoppedSpeakingFrame):
             self.bot_speaking = False
+            self.last_activity = self.clock()
             self.response_pending = False
             self.quiet_until = self.clock()+1.
         elif isinstance(frame, InterruptionFrame):
@@ -69,10 +72,11 @@ class VisitorControl(FrameProcessor):
 
 class ProactiveTurn(FrameProcessor):
     """After user aggregation; shares its context but never invents a user turn."""
-    def __init__(self, state, context, vision=None):
+    def __init__(self, state, context, vision=None, quips=None):
         super().__init__()
         self.state, self.context = state, context
         self.vision = vision
+        self.quips = quips
         self._ticker = None
 
     async def tick(self):
@@ -80,6 +84,20 @@ class ProactiveTurn(FrameProcessor):
         if state.clock() < state.quiet_until:
             return
         free = not (state.scene.encounter.silenced or state.user_speaking or state.bot_speaking or state.response_pending)
+        if self.quips:
+            # A single director arbitrates all spontaneous speech for this pack.
+            # Existing conversation/skill requests continue through the pipeline.
+            arrival = state.scene.encounter.take_event(
+                user_speaking=state.user_speaking,
+                bot_speaking=state.bot_speaking or state.response_pending)
+            state.scene.space.take_event()  # Never turn proximity into nagging.
+            event = self.quips.take_event(state, self.vision, arrival=bool(arrival))
+            if event:
+                state.response_pending = True
+                frame = LLMContextFrame(self.context)
+                frame.scene_event = event
+                await self.push_frame(frame)
+            return
         event = state.scene.space.take_event() if free else None
         event = event or state.scene.encounter.take_event(
             user_speaking=state.user_speaking,

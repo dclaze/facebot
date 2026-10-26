@@ -3,6 +3,7 @@ import json
 from pathlib import Path
 from server.profiles import load, active
 from server.robin_performance import RobinPerformance as RobinSkit
+from server.scripted_quips import load_quips
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -13,10 +14,12 @@ def snapshot():
     profile = active()
     sound_policy = (ROOT/'contexts/sounds'/f"{profile['id']}.json").exists()
     robin_available = bool(RobinSkit().pcm)
+    quip_pack = load_quips(profile['id'])
     for item in catalog['skills']:
         item['configured'] = (not item.get('requires_sound_policy') or sound_policy) and (
             not item.get('requires_visual_reactions') or bool(profile['visual_reactions'])) and (
-            not item.get('requires_robin_skit') or robin_available)
+            not item.get('requires_robin_skit') or robin_available) and (
+            not item.get('requires_quip_pack') or quip_pack is not None)
     for item in catalog['personalities']:
         item['event_ids'] = [key for key, event in events.items() if event['character'] == item['id']]
         item['configured'] = profile['character'] == item['id']
