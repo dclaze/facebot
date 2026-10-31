@@ -2,11 +2,15 @@
 
 **Give your Halloween costume a face. And an attitude.**
 
-Facebot is a planned open-source, locally powered Halloween character: a tablet becomes an expressive face that notices visitors, talks naturally, and delivers deeply unnecessary opinions about their candy etiquette.
+Facebot is an open-source, locally powered Halloween character: a tablet becomes an expressive face that notices visitors, talks naturally, and delivers deeply unnecessary opinions about their candy etiquette.
 
 > “One piece, darling. This is a haunting, not a wholesale operation.”
 
-**Status: implementation in progress. Native display shells and a local speech-server prototype exist; neither physical platform has passed acceptance.** Facebot is a working name. Follow [STATUS.md](STATUS.md) for the current milestone and [the roadmap](docs/ROADMAP.md) for acceptance criteria.
+**Halloween Android alpha:** download the signed APK from [Releases](https://github.com/dclaze/facebot/releases) and follow the [setup guide](docs/PUBLIC_SETUP.md). Requires an Android tablet (Android 8+) and an Apple Silicon Mac host. The public APK contains no pairing credentials or models.
+
+The free skill shop includes a candy host, short jokes, invited playful scares, an explicit-turn laugh challenge and licensed sound effects. Enable packs from the Mac owner controls; upgrades in this release are bundled and free, with no checkout. Personal guest performances require separately supplied local media and are not distributed. Kiosk mode uses bounded authored replies, including a safe fallback, rather than open-ended chat.
+
+The host watchdog restarts the voice service and owner controls independently and keeps the Mac awake. An optional USB watchdog can reopen an absent tablet app process while voice stays on Wi-Fi. Default Home selection alone did not recover a forced crash on the tested Lenovo. This is an experimental self-hosted release: full 12-hour endurance and generated acoustic latency acceptance remain outstanding. See [readiness tooling](skills/facebot-kiosk-certification/SKILL.md), [STATUS.md](STATUS.md) and [the roadmap](docs/ROADMAP.md).
 
 ## What we want to build
 
@@ -19,7 +23,7 @@ Facebot is a planned open-source, locally powered Halloween character: a tablet 
 - Optional candy-bowl commentary that encourages one piece per visitor.
 - Reliable operation for a 12-hour event.
 
-The intended setup is a tablet on a stand, optionally inside a costume, connected to a local Mac server. Both iOS/iPadOS and Android are target platforms, with physical-device validation required for each. A shared browser client and native clients are being evaluated; models and application architecture have not been selected.
+The intended setup is a tablet on a stand, optionally inside a costume, connected to a local Mac server. Both iOS/iPadOS and Android are target platforms, with physical-device validation required for each. The Android alpha uses native playback with local Whisper, Kokoro and Ollama on the Mac. iOS remains a separate validation target.
 
 ## Responsiveness is a core requirement
 

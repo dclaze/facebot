@@ -1,3 +1,13 @@
+# Halloween Android alpha checkpoint — 2026-10-31 UTC
+
+Public distribution scope: Android APK plus Apple Silicon Mac setup guide and free bundled skill packs. Public artifacts exclude pairing credentials, visitor media and the personal guest performance. See docs/PUBLIC_SETUP.md and docs/KIOSK_RECOVERY.md.
+
+Software/visual evidence: native build and signing checks, isolated kiosk/store/control/recovery tests, actual desktop/phone store screenshots and physical Lenovo face/caption/quiet/cackle inspection. Eighteen host-dispatched scenarios reached native playback over Wi-Fi (no USB reverse): median89.96ms,p95155.7ms. This includes return network/polling and excludes microphone recognition and acoustic output. Actual Wi-Fi disconnect/reconnect preserved mute. A synthesized stop spoken through the Mac speaker was accepted by the tablet microphone and muted output. No external certification is claimed.
+
+Overall product NOT DELIVERED against full acceptance:12-hour endurance and200msmedian/500msp95 generated audible response remain unverified/unmet. Home-app selection alone failed an induced tablet crash; use the optional USB watchdog for a tested attached rig, and independently test other devices. The aggregate readiness runner preserves missing physical evidence. Current active coordination is maintained by the runtime owner; the historical handoff follows.
+
+---
+
 # Facebot status
 
 Updated: 2026-10-25 (America/Los_Angeles)
