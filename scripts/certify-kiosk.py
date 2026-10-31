@@ -17,7 +17,7 @@ import time
 import zipfile
 
 ROOT = Path(__file__).resolve().parents[1]
-CORE_TESTS = ('test_kiosk_experiences.py', 'test_skill_store.py', 'test_kiosk_transport.py', 'test_kiosk_service.py', 'test_kiosk_tools.py', 'test_kiosk_control.py', 'test_skill_runtime.py', 'test_benchmark_device.py', 'test_tablet_watchdog.py', 'test_vision_setup.py', 'test_speech_readiness.py', 'test_captions.py', 'test_vision_priority.py', 'test_visitor_control_pipeline.py')
+CORE_TESTS = ('test_kiosk_experiences.py', 'test_skill_store.py', 'test_kiosk_transport.py', 'test_kiosk_service.py', 'test_kiosk_tools.py', 'test_kiosk_control.py', 'test_skill_runtime.py', 'test_benchmark_device.py', 'test_tablet_watchdog.py', 'test_vision_setup.py', 'test_speech_readiness.py', 'test_captions.py', 'test_vision_priority.py', 'test_visitor_control_pipeline.py', 'test_capture_vad.py')
 EXTRA_TESTS = ('test_reply_quality.py', 'test_tts_stream.py', 'test_protocol.py')
 NATIVE = ('ConnectionPolicy', 'PerformanceFaceCue', 'PlaybackProbe', 'KioskStatus', 'PlaybackQueue', 'CaptionTimeline', 'PerformanceVideoCue', 'EchoControl', 'QuietControlState')
 PHYSICAL = ('device', 'wifi', 'recovery', 'visual', 'endurance', 'generated_latency')
