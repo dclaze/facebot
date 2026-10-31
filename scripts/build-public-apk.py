@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Build a credential-free signed alpha. Signing secrets never enter command text or logs."""
+import argparse
 import hashlib
 import json
 import os
@@ -7,6 +8,8 @@ from pathlib import Path
 import secrets
 import subprocess
 import zipfile
+
+argparse.ArgumentParser(description=__doc__).parse_args()
 
 ROOT = Path(__file__).resolve().parents[1]
 PRIVATE = ROOT / '.local/android-release'
