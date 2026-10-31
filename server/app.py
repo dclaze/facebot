@@ -35,6 +35,7 @@ from server.hearing import HearingRepair
 from server.prepared_conversation import PreparedConversation
 from server.kiosk_playback import KioskPlayback
 from server.playback_probe import PlaybackProbes, SCENARIOS
+from server.kiosk_control import MuteLatch
 from server import settings, skill_store
 from server.profiles import active
 from server.context_budget import ContextBudget, BudgetedContext
@@ -118,6 +119,7 @@ def create_app(token, engine=None):
     recorder = InteractionRecorder.configured()
     timing = StageTiming()
     probes = PlaybackProbes()
+    mute = MuteLatch()
     sound_bank = SoundBank()
     robin_skit = RobinSkit()
     sound_performance_config = load_performance(active()['id'], sound_bank)
@@ -166,6 +168,7 @@ def create_app(token, engine=None):
             raise HTTPException(status_code=403)
         report = timing.report()
         report['playback_probes'] = probes.report()
+        report['mute'] = {'enabled': mute.value, 'persistence_error': mute.error}
         report['recording'] = recorder.report()
         report['transcription'] = current_interaction.stt.report() if current_interaction else None
         report['scripted_quips'] = quips.report() if quips else {'enabled': False}
@@ -205,9 +208,10 @@ def create_app(token, engine=None):
     async def owner_stop(authorization: str = Header(default='')):
         if not hmac.compare_digest(authorization, 'Bearer ' + token):
             raise HTTPException(status_code=403)
+        effective = mute.set_muted(True)
         if current_interaction and current_task:
             from pipecat.frames.frames import InterruptionFrame
-            current_interaction.scene.encounter.silenced = True
+            current_interaction.scene.encounter.silenced = effective
             current_interaction.control_epoch += 1
             current_interaction.response_pending = False
             await current_task.queue_frame(InterruptionFrame())
@@ -218,8 +222,11 @@ def create_app(token, engine=None):
     async def owner_resume(authorization: str = Header(default='')):
         if not hmac.compare_digest(authorization, 'Bearer ' + token):
             raise HTTPException(status_code=403)
+        effective = mute.set_muted(False)
         if current_interaction:
-            current_interaction.scene.encounter.silenced = False
+            current_interaction.scene.encounter.silenced = effective
+        if effective:
+            raise HTTPException(status_code=503, detail='Mute settings could not be saved; staying muted')
         return {'status':'unmuted' if current_interaction else 'disconnected'}
 
     @app.post('/skills/robin-williams/preview')
@@ -252,6 +259,7 @@ def create_app(token, engine=None):
         async with occupied:
             await ws.accept()
             scene = SceneState()
+            scene.encounter.silenced = mute.value
             interaction = InteractionState(scene)
             performance = SoundPerformance(sound_bank, interaction, sound_performance_config,
                                            pack_enabled=lambda: skill_store.enabled('sound-effects'))
@@ -278,7 +286,7 @@ def create_app(token, engine=None):
             interaction.performance_video_enabled = video_enabled
             interaction.playback_probes_enabled = 'playback-probe-v1' in ws.headers.get('x-facebot-capabilities','').split(',')
             current_quips = OwnerQuips(interaction, mark=timing.mark)
-            pipeline = Pipeline([transport.input(), stt, RecordingTap(recorder, "input"), FrameTrace(name="after_stt", timing=timing), VisitorControl(interaction), pair.user(), ProactiveTurn(interaction, context, vision=vision, quips=quips), robin_request, SoundEffectRequest(sound_bank, interaction, mark=timing.mark, name_provider=lambda: settings.read()['character_name'], performance=performance, enabled=lambda: skill_store.enabled('sound-effects')), VisualReaction(interaction, mark=timing.mark), HearingRepair(name=active()['character_profile']['defaults']['character_name'], mark=timing.mark, name_provider=lambda: settings.read()['character_name']), PreparedConversation(interaction, mark=timing.mark, name_provider=lambda: settings.read()['character_name'], enabled=skill_store.enabled), FrameTrace(name="before_llm", scene=scene, timing=timing, vision=vision), BudgetedContext(context_budget, timing), llm, FrameTrace(name="after_llm", timing=timing), RobinIntentReply(robin_request), ReplyGuard(is_silenced=lambda: scene.encounter.silenced, record=recorder.event),
+            pipeline = Pipeline([transport.input(), stt, RecordingTap(recorder, "input"), FrameTrace(name="after_stt", timing=timing), VisitorControl(interaction, on_mute=mute.set_muted), pair.user(), ProactiveTurn(interaction, context, vision=vision, quips=quips), robin_request, SoundEffectRequest(sound_bank, interaction, mark=timing.mark, name_provider=lambda: settings.read()['character_name'], performance=performance, enabled=lambda: skill_store.enabled('sound-effects')), VisualReaction(interaction, mark=timing.mark), HearingRepair(name=active()['character_profile']['defaults']['character_name'], mark=timing.mark, name_provider=lambda: settings.read()['character_name']), PreparedConversation(interaction, mark=timing.mark, name_provider=lambda: settings.read()['character_name'], enabled=skill_store.enabled), FrameTrace(name="before_llm", scene=scene, timing=timing, vision=vision), BudgetedContext(context_budget, timing), llm, FrameTrace(name="after_llm", timing=timing), RobinIntentReply(robin_request), ReplyGuard(is_silenced=lambda: scene.encounter.silenced, record=recorder.event),
                                  AutomaticSoundDirector(performance), RecordingTap(recorder, "reply"), current_quips, LocalTTS(engine, timing=timing), KioskPlayback(interaction, mark=timing.mark), RobinSkitPlayback(robin_skit, interaction, mark=timing.mark, video_enabled=video_enabled), SoundEffectPlayback(sound_bank, interaction, mark=timing.mark, performance=performance), FrameTrace(name="after_tts", timing=timing), transport.output(), pair.assistant()])
             # Visitor encounters can be separated by long quiet periods.
             # Socket disconnect/app lifecycle still cancels this worker.
