@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
 """Prepare the public Apple Silicon Mac host; --check is read-only."""
 import argparse
+import asyncio
+import io
+import time
 import json
 import os
 from pathlib import Path
@@ -11,7 +14,7 @@ import subprocess
 import sys
 
 ROOT = Path(__file__).resolve().parents[1]
-MODELS = ('qwen2.5:1.5b', 'qwen3-vl:2b-instruct')
+MODELS = ('qwen2.5:1.5b', 'qwen3-vl:2b')
 
 
 def find_tool(name):
@@ -82,9 +85,50 @@ def commands(root, skip_models=False, find=find_tool):
     return steps
 
 
+async def vision_smoke():
+    """Two bounded real labeler attempts; cold loading may exceed frame freshness.
+
+    A successful synthetic request proves endpoint/model/schema/freshness only,
+    not useful visual recognition. No camera, visitor frame or image file is used.
+    """
+    import httpx
+    from PIL import Image
+    from server.vision import ImageLabeler, VisionState, MODEL, OLLAMA_CHAT_URL
+    state = VisionState()
+    labeler = ImageLabeler(state)
+    image = io.BytesIO()
+    Image.new('RGB', (64, 64), color=(128, 128, 128)).save(image, format='JPEG')
+    attempts = []
+    try:
+        for attempt in range(1, 3):
+            started = time.monotonic()
+            try:
+                accepted = await labeler.label(image.getvalue())
+            except (httpx.HTTPError, OSError, ValueError, KeyError, TypeError) as error:
+                attempts.append({'attempt': attempt, 'status': 'error', 'error_type': type(error).__name__,
+                                 'elapsed_ms': round((time.monotonic()-started)*1000)})
+            else:
+                attempts.append({'attempt': attempt, 'status': 'accepted' if accepted else 'stale',
+                                 'elapsed_ms': round((time.monotonic()-started)*1000)})
+                if accepted:
+                    break
+    finally:
+        await labeler.close()
+    return {'status': 'ready' if attempts[-1]['status'] == 'accepted' else 'failed',
+            'evidence': 'synthetic blank JPEG through actual local model endpoint and runtime schema validator',
+            'endpoint': OLLAMA_CHAT_URL, 'model': MODEL, 'frame_ttl_seconds': state.TTL,
+            'attempts': attempts, 'visual_recognition_quality_tested': False,
+            'microphone_or_camera_used': False}
+
+
 def warm_models(root):
     """Synthetic local setup only: no microphone, camera or cloud inference."""
     sys.path.insert(0, str(root))
+    from server.experiences import atomic_json
+    vision_receipt = asyncio.run(vision_smoke())
+    atomic_json(root / '.local/setup/vision-smoke.json', vision_receipt)
+    if vision_receipt['status'] != 'ready':
+        raise RuntimeError('Vision setup failed; inspect .local/setup/vision-smoke.json for endpoint/model/freshness errors')
     import numpy as np
     import mlx_whisper
     from huggingface_hub import snapshot_download
@@ -152,6 +196,6 @@ def main():
 if __name__ == '__main__':
     try:
         raise SystemExit(main())
-    except (OSError, ValueError, subprocess.SubprocessError):
+    except (OSError, ValueError, RuntimeError, subprocess.SubprocessError):
         print('Setup did not complete. Check the failed local prerequisite or command; existing pairing data was not replaced.', file=sys.stderr)
         raise SystemExit(1)

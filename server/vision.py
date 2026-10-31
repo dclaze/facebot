@@ -12,7 +12,8 @@ import time
 import httpx
 from PIL import Image
 
-MODEL = 'qwen3-vl:2b-instruct'
+MODEL = 'qwen3-vl:2b'
+OLLAMA_CHAT_URL = 'http://127.0.0.1:11434/api/chat'
 LABELS = (
     'sofa', 'chair', 'table', 'phone', 'remote control', 'blanket', 'window', 'plant', 'book', 'cup', 'bottle', 'dog', 'cat',
     'pumpkin', 'candy bowl', 'bag', 'backpack', 'ball', 'toy',
@@ -164,7 +165,7 @@ class ImageLabeler:
             return False
         async with self.busy:
             start = self.state.clock()
-            response = await self.client.post('http://127.0.0.1:11435/api/chat', json={
+            response = await self.client.post(OLLAMA_CHAT_URL, json={
                 'model': MODEL, 'stream': False, 'think': False, 'keep_alive': '10m',
                 'messages': [{'role': 'user', 'content': PROMPT,
                               'images': [base64.b64encode(jpeg).decode('ascii')]}],
