@@ -2,6 +2,8 @@
 
 This release uses an **Android tablet plus an Apple Silicon Mac host**. The APK is the face, microphone, camera and speaker client; it does not contain the local speech/vision models or replace the Mac. Keep both devices powered and the Mac awake throughout an event. This is an experimental self-hosted release, not a claim that every device has passed 12-hour or acoustic-latency acceptance.
 
+On the tested Lenovo TB-J606F with Android 11, the compatibility profile avoids a vendor echo-cancellation path associated with observed audio-service crashes. Speak after the face finishes, or use **Quiet** to stop output and **Resume** to allow it again. Quiet persists through app restart; controls stay above video without covering its title. This profile does not support spoken interruption during playback. See [Android kiosk setup](ANDROID_KIOSK_SETUP.md) for the precise scope and limits. Experimental software echo cancellation is not included in the public APK.
+
 The bundled packs are free. There is no checkout, subscription or paid inference service in this setup. The personal guest performance is separately supplied local media and is not included. Project code, model weights, voices and sound recordings retain their own licenses; see the repository license and each content package's credits before redistribution.
 
 ## Prepare the Mac
