@@ -339,9 +339,10 @@ def create_app(token, engine=None):
                     age_ms = int.from_bytes(packet[:4], 'big')
                     try:
                         await labeler.label(packet[4:], age_ms)
-                    except Exception:
-                        # No exception contents: image/model response may contain scene data.
+                    except Exception as error:
+                        # Class only: never retain image/model output or exception text.
                         vision.errors += 1
+                        vision.last_error_kind = type(error).__name__
                     await ws.send_json(vision.report())
             except Exception:
                 pass  # Connection closure must never tear down the voice pipeline.

@@ -74,6 +74,7 @@ class VisionState:
         self.inference_ms = None
         self.frames = 0
         self.errors = 0
+        self.last_error_kind = None
         self.version = 0
         self.last_commented = ()
         self.last_comment = float('-inf')
@@ -135,7 +136,7 @@ class VisionState:
         return {'kind': 'visual_labels', 'labels': self.labels, 'version': self.version}
 
     def report(self):
-        return {'model': MODEL, 'frames': self.frames, 'errors': self.errors,
+        return {'model': MODEL, 'frames': self.frames, 'errors': self.errors, 'last_error_kind': self.last_error_kind,
                 'fresh': self.fresh(), 'labels': list(self.labels) if self.fresh() else [],
                 'candidates': list(self.previous) if self.fresh() else [],
                 'people': [{'position':p,'age_band':a,'items':list(i)} for p,a,i in self.people] if self.fresh() else [],
