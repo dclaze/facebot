@@ -59,15 +59,34 @@ class LocalSTT(WhisperSTTServiceMLX):
         super().__init__(**kwargs)
         self.recorder = recorder
         self.counts = Counter()
+        self._inference_tasks = set()
+        self.last_inference_finished = float('-inf')
+
+    @property
+    def inference_active(self):
+        return bool(self._inference_tasks)
+
+    def _inference_finished(self, task):
+        self._inference_tasks.discard(task)
+        self.last_inference_finished = time.monotonic()
+        # A cancelled turn can leave native inference running. Consume its
+        # failure without logging text; an active await still gets the error.
+        if not task.cancelled():
+            task.exception()
 
     async def run_stt(self, audio):
         started = time.monotonic()
         await self.start_processing_metrics()
         try:
             pcm = np.frombuffer(audio, dtype=np.int16).astype(np.float32) / 32768.
-            result = await asyncio.to_thread(
+            inference = asyncio.create_task(asyncio.to_thread(
                 transcribe, pcm, model=self._settings.model,
-            )
+            ))
+            self._inference_tasks.add(inference)
+            inference.add_done_callback(self._inference_finished)
+            # Cancelling a visitor turn cannot cancel the native worker. Keep
+            # its task alive and marked busy until it really finishes.
+            result = await asyncio.shield(inference)
             text, reasons = select_transcript(result)
             self.counts['utterances'] += 1
             self.counts['accepted' if text else 'rejected'] += 1
@@ -94,4 +113,5 @@ class LocalSTT(WhisperSTTServiceMLX):
 
     def report(self):
         return {'model': self._settings.model, 'counts': dict(self.counts),
-                'confidence_is_accuracy': False, 'vad_stop_seconds': .45}
+                'confidence_is_accuracy': False, 'vad_stop_seconds': .45,
+                'inference_active': self.inference_active}

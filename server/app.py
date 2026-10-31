@@ -42,6 +42,7 @@ from server.profiles import active
 from server.context_budget import ContextBudget, BudgetedContext
 from server.interaction import InteractionState, VisitorControl, ProactiveTurn
 from server.vision import VisionState, ImageLabeler
+from server.vision_priority import VisionPriority
 from server.visual_reactions import VisualReaction
 from server.scripted_quips import QuipDirector, load_quips
 from server.sound_effects import SoundBank, SoundEffectRequest, SoundEffectPlayback
@@ -130,7 +131,8 @@ def create_app(token, engine=None):
     quip_pack = load_quips(active()['id'])
     quips = QuipDirector(quip_pack) if quip_pack else None
     vision = VisionState()
-    labeler = ImageLabeler(vision)
+    vision_priority = VisionPriority(vision)
+    labeler = ImageLabeler(vision, should_defer=lambda: vision_priority.should_defer(current_interaction))
     vision_occupied = asyncio.Lock()
     stt_readiness = {'model': STT_MODEL, 'ready': False}
     @asynccontextmanager

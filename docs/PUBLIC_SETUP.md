@@ -141,3 +141,16 @@ Relative artifact paths resolve against the receipt directory. Do not copy the e
 | `generated_latency` | `timing_basis` exactly `utterance_end_to_audible_generated_speech`; `cached_responses` false; integer `samples` at least 20; measured `median_ms` ≤200 and `p95_ms` ≤500 |
 
 The 20-sample minimum is the runner's reporting protocol; it is not a claim of statistical certification. Native AudioTrack playback-head acknowledgement, synthesized PCM timing and cached responses do not satisfy the generated acoustic measurement. A public source ZIP may include a `SOURCE_COMMIT` file containing the exact lowercase 40-character release commit. The runner labels this `archive_declaration`, binds supplied receipts to that declared commit and records its hash, while leaving source integrity unverified: the metadata is not a signature or proof that all extracted files match. Compare the complete source archive against the independently published release SHA256, retain that artifact provenance, and do not substitute an enclosing unrelated Git repository. A clean actual checkout is the verified Git path. See [conversation timing](CONVERSATION_TIMING.md) and [recovery verification](KIOSK_RECOVERY.md) for measurement boundaries.
+
+### Voice priority while vision is running
+
+New camera inference is deferred during visitor speech, active transcription,
+response generation and playback, with a 300 ms quiet grace. Each deferred frame
+is acknowledged and discarded rather than queued. Continuous deferral is capped
+at three seconds (half the six-second vision freshness window), so prolonged
+speech or a stuck activity flag still permits a new camera observation. This can
+allow an inference to overlap a long voice turn. An already submitted Ollama
+request cannot be preempted by this gate. Camera timestamps and expiry remain
+unchanged: deferral may make observations stale, and stale labels stay excluded.
+Owner vision diagnostics expose deferred-frame and priority-refresh counts.
+These are scheduling receipts, not evidence of lower acoustic or recognition latency.

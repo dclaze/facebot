@@ -87,6 +87,9 @@ class VisionState:
         self.inference_ms = None
         self.frames = 0
         self.errors = 0
+        self.deferred_frames = 0
+        self.priority_refreshes = 0
+        self.last_defer_reason = None
         self.last_error_kind = None
         self.last_reply_shape = None
         self.version = 0
@@ -151,6 +154,8 @@ class VisionState:
 
     def report(self):
         return {'model': MODEL, 'frames': self.frames, 'errors': self.errors, 'last_error_kind': self.last_error_kind, 'last_reply_shape': self.last_reply_shape,
+                'deferred_frames': self.deferred_frames, 'priority_refreshes': self.priority_refreshes,
+                'last_defer_reason': self.last_defer_reason,
                 'fresh': self.fresh(), 'labels': list(self.labels) if self.fresh() else [],
                 'candidates': list(self.previous) if self.fresh() else [],
                 'people': [{'position':p,'age_band':a,'items':list(i)} for p,a,i in self.people] if self.fresh() else [],
@@ -160,8 +165,9 @@ class VisionState:
 
 
 class ImageLabeler:
-    def __init__(self, state):
+    def __init__(self, state, should_defer=None):
         self.state = state
+        self.should_defer = should_defer
         self.url = vision_url()
         self.client = httpx.AsyncClient(timeout=20, trust_env=False)
         self.busy = asyncio.Lock()
@@ -177,6 +183,10 @@ class ImageLabeler:
             if image.format != 'JPEG' or image.width > 640 or image.height > 640:
                 raise ValueError('Expected a JPEG no larger than 640 pixels')
             image.verify()
+        # Acknowledge a skipped frame immediately; never retain it for later.
+        # Validation still runs and freshness keeps its original timestamp.
+        if self.should_defer is not None and self.should_defer():
+            return False
         if self.busy.locked():
             return False
         async with self.busy:
