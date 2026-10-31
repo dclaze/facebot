@@ -26,6 +26,8 @@ from pathlib import Path
 root = Path(sys.argv[1])
 (root / 'observed.json').write_text(json.dumps({key:os.environ[key] for key in
  ['FACEBOT_PROFILE','FACEBOT_LLM','FACEBOT_TTS','FACEBOT_SPEECH_RATE','FACEBOT_KIOSK_MODE']}))
+(root / 'vision-env.json').write_text(json.dumps({key:os.environ.get(key) for key in
+ ['OLLAMA_HOST','OLLAMA_MODELS','OLLAMA_NUM_PARALLEL','OLLAMA_MAX_LOADED_MODELS','FACEBOT_VISION_URL','FACEBOT_TOKEN']}))
 with (root / 'starts').open('a') as stream: stream.write(str(time.time()) + '\n')
 print(os.environ.get('FACEBOT_TOKEN',''), flush=True)
 mode = root / 'mode'
@@ -35,6 +37,7 @@ class Handler(BaseHTTPRequestHandler):
  def do_GET(self):
   if mode.read_text() == 'hang': time.sleep(30)
   value = {'status':'ready','profile':os.environ['FACEBOT_PROFILE'], 'etag':'fixture', 'tts':{'backend':os.environ['FACEBOT_TTS']}}
+  if self.path == '/api/tags': value = {'models':[]}
   if mode.read_text() == 'wrong_profile': value['profile'] = 'wrong'
   raw = json.dumps(value).encode()
   self.send_response(200); self.end_headers(); self.wfile.write(raw)
@@ -135,6 +138,76 @@ class KioskRecoveryTests(unittest.TestCase):
             except FileNotFoundError:
                 return False
         wait_for(ready)
+
+    def test_vision_ollama_config_is_opt_in_loopback_and_dedicated_models(self):
+        args = SimpleNamespace(root=str(SCRIPT.parents[1]), python=sys.executable,
+                               token_file=str(self.root / 'token'), profile='halloween',
+                               model='qwen2.5:1.5b', tts='kokoro', speech_rate=1.12,
+                               host='127.0.0.1', trusted_lan=False, port=8765, no_admin=True)
+        self.assertNotIn('vision_ollama', kiosk.build_config(args))
+        args.vision_ollama = sys.executable
+        config = kiosk.build_config(args)
+        vision = config['vision_ollama']
+        self.assertEqual((vision['host'], vision['port']), ('127.0.0.1', 11435))
+        self.assertEqual(vision['command'], [str(Path(sys.executable).resolve()), 'serve'])
+        self.assertEqual(Path(vision['models_dir']), (SCRIPT.parents[1] / '.local/ollama-vision/models').resolve())
+        args.vision_models = str(self.root / 'models')
+        self.assertEqual(kiosk.build_config(args)['vision_ollama']['models_dir'], str(Path(args.vision_models).resolve()))
+        args.port = 11435
+        with self.assertRaises(ValueError): kiosk.build_config(args)
+        args.port = 8765
+        args.vision_ollama = str(self.root / 'absent')
+        with self.assertRaises(ValueError): kiosk.build_config(args)
+        args.vision_ollama = None
+        with self.assertRaises(ValueError): kiosk.build_config(args)
+
+    def test_vision_ollama_recovers_death_and_hang_independently_then_reaps(self):
+        self.configure_admin_fixture()
+        directory = self.root / 'vision-fixture'
+        directory.mkdir()
+        (directory / 'mode').write_text('ready')
+        with socket.socket() as sock:
+            sock.bind(('127.0.0.1', 0))
+            port = sock.getsockname()[1]
+        self.config['vision_ollama'] = dict(role='vision_ollama', host='127.0.0.1', port=port,
+            models_dir=str(directory / 'models'),
+            command=[sys.executable, str(self.fixture), str(directory), str(port)])
+        self.start()
+        self.ready()
+        self.admin_ready()
+        def vision_ready():
+            try: return json.loads((self.state / 'vision_ollama/status.json').read_text()).get('phase') == 'ready'
+            except FileNotFoundError: return False
+        wait_for(vision_ready)
+        voice_pid, admin_pid = self.supervisor.child.pid, self.supervisor.admin.child.pid
+        sidecar = self.supervisor.vision_ollama
+        first = sidecar.child.pid
+        observed = json.loads((directory / 'vision-env.json').read_text())
+        self.assertEqual(observed['OLLAMA_HOST'], f'127.0.0.1:{port}')
+        self.assertEqual(observed['OLLAMA_MODELS'], str(directory / 'models'))
+        self.assertEqual(observed['OLLAMA_NUM_PARALLEL'], '1')
+        self.assertEqual(observed['OLLAMA_MAX_LOADED_MODELS'], '1')
+        self.assertIsNone(observed['FACEBOT_TOKEN'])
+        self.assertEqual(json.loads((self.root / 'vision-env.json').read_text())['FACEBOT_VISION_URL'],
+                         f'http://127.0.0.1:{port}/api/chat')
+        self.assertIsNone(self.supervisor.admin.vision_ollama)
+        self.assertIsNone(sidecar.admin)
+        os.kill(first, signal.SIGKILL)
+        wait_for(lambda: sidecar.child and sidecar.child.pid != first)
+        wait_for(vision_ready)
+        second = sidecar.child.pid
+        (directory / 'mode').write_text('hang')
+        wait_for(lambda: sidecar.restarts >= 2)
+        (directory / 'mode').write_text('ready')
+        wait_for(lambda: sidecar.child and sidecar.child.pid != second)
+        wait_for(vision_ready)
+        self.assertEqual((self.supervisor.child.pid, self.supervisor.admin.child.pid), (voice_pid, admin_pid))
+        final = sidecar.child.pid
+        self.supervisor.stop_event.set()
+        self.thread.join(4)
+        self.assertFalse(self.thread.is_alive())
+        for pid in (first, second, final, voice_pid, admin_pid):
+            with self.assertRaises(ProcessLookupError): os.kill(pid, 0)
 
     def test_admin_and_voice_crashes_recover_independently_then_both_reap(self):
         self.configure_admin_fixture()

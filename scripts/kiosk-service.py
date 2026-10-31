@@ -23,6 +23,7 @@ LABEL = 'org.facebot.kiosk'
 DEFAULT_STATE = Path.home() / 'Library/Application Support/Facebot/kiosk'
 # Shared across release trees and state directories: never run two local kiosks.
 LOCK = Path.home() / 'Library/Application Support/Facebot/kiosk-owner.lock'
+SIDECARS = ('admin', 'vision_ollama')
 
 
 def atomic_json(path, value):
@@ -50,9 +51,12 @@ def healthy(config):
     # No token, remote host, response body or exception is logged.
     try:
         opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
-        route = '/api/settings' if config.get('role') == 'admin' else '/health'
+        role = config.get('role')
+        route = {'admin': '/api/settings', 'vision_ollama': '/api/tags'}.get(role, '/health')
         with opener.open(f"http://{config.get('host', '127.0.0.1')}:{config['port']}{route}",
                          timeout=config['health_timeout']) as response:
+            if role == 'vision_ollama':
+                return response.status == 200
             value = json.loads(response.read(65537))
         if config.get('role') == 'admin':
             return value.get('profile') == config['profile'] and isinstance(value.get('etag'), str)
@@ -115,6 +119,7 @@ class Supervisor:
         self.child = None
         self.restarts = 0
         self.admin = self.admin_thread = None
+        self.vision_ollama = self.vision_ollama_thread = None
         self.sleep_guard = self.sleep_thread = None
         self.tablet_guard = self.tablet_thread = None
         self.logger = logging.getLogger(f'facebot.kiosk.{id(self)}')
@@ -128,12 +133,13 @@ class Supervisor:
                      profile=self.config['profile'], model=self.config['model'],
                      tts=self.config['tts'], root=self.config['root'],
                      host=self.config.get('host', '127.0.0.1'), role=self.config.get('role', 'voice'), **fields)
-        if self.admin is not None:
-            try:
-                value['admin'] = json.loads((self.state / 'admin/status.json').read_text())
-            except (OSError, ValueError):
-                value['admin'] = {'phase': 'starting'}
-            value['admin']['watchdog_alive'] = self.admin_thread.is_alive()
+        for name in SIDECARS:
+            if getattr(self, name) is not None:
+                try:
+                    value[name] = json.loads((self.state / name / 'status.json').read_text())
+                except (OSError, ValueError):
+                    value[name] = {'phase': 'starting'}
+                value[name]['watchdog_alive'] = getattr(self, name + '_thread').is_alive()
         if self.sleep_guard is not None:
             value['idle_sleep_protected'] = self.sleep_guard.active()
         if self.tablet_guard is not None:
@@ -156,7 +162,7 @@ class Supervisor:
 
     def spawn(self):
         env = os.environ.copy()
-        if self.config.get('role') != 'admin':
+        if self.config.get('role') not in SIDECARS:
             token = Path(self.config['token_file']).read_text().strip()
             if len(token) < 24 or '\n' in token:
                 raise ValueError('Invalid token file')
@@ -167,6 +173,12 @@ class Supervisor:
                    FACEBOT_LLM=self.config['model'], FACEBOT_TTS=self.config['tts'],
                    FACEBOT_SPEECH_RATE=str(self.config['speech_rate']),
                    FACEBOT_KIOSK_MODE='1')
+        if self.config.get('role') == 'vision_ollama':
+            env.update(OLLAMA_HOST=f"127.0.0.1:{self.config['port']}",
+                       OLLAMA_MODELS=self.config['models_dir'],
+                       OLLAMA_NUM_PARALLEL='1', OLLAMA_MAX_LOADED_MODELS='1')
+        elif self.config.get('vision_ollama'):
+            env['FACEBOT_VISION_URL'] = f"http://127.0.0.1:{self.config['vision_ollama']['port']}/api/chat"
         # Same process group intentionally: launchd removes descendants when the
         # supervisor is killed. Do not set start_new_session or AbandonProcessGroup.
         self.child = subprocess.Popen(self.config['command'], cwd=self.config['root'],
@@ -177,14 +189,17 @@ class Supervisor:
     def start_support(self):
         if self.stop_event.is_set():
             return
-        if self.config.get('admin'):
-            config = {**self.config, **self.config['admin']}
-            config.pop('admin', None)
-            config.pop('tablet_watchdog', None)
-            config['prevent_sleep'] = False
-            self.admin = Supervisor(config, self.state / 'admin', self.state / 'admin-owner.lock')
-            self.admin_thread = threading.Thread(target=self.admin.run, name='facebot-admin-watchdog', daemon=True)
-            self.admin_thread.start()
+        for name in SIDECARS:
+            if self.config.get(name):
+                config = {**self.config, **self.config[name]}
+                for nested in (*SIDECARS, 'tablet_watchdog'):
+                    config.pop(nested, None)
+                config['prevent_sleep'] = False
+                sidecar = Supervisor(config, self.state / name, self.state / (name + '-owner.lock'))
+                thread = threading.Thread(target=sidecar.run, name='facebot-' + name + '-watchdog', daemon=True)
+                setattr(self, name, sidecar)
+                setattr(self, name + '_thread', thread)
+                thread.start()
         if self.config.get('prevent_sleep', False):
             self.sleep_guard = SleepGuard(self.stop_event, self.logger)
             self.sleep_thread = threading.Thread(target=self.sleep_guard.run, name='facebot-sleep-guard', daemon=True)
@@ -197,15 +212,17 @@ class Supervisor:
 
     def stop_support(self):
         self.stop_event.set()
-        if self.admin is not None:
-            self.admin.stop_event.set()
-        # Both independent watchdogs begin shutdown before we reap voice, so
-        # admin's grace period does not get added to voice's grace period.
+        for name in SIDECARS:
+            if getattr(self, name) is not None:
+                getattr(self, name).stop_event.set()
+        # All independent watchdogs begin shutdown before we reap voice.
         self.stop_child()
-        if self.admin_thread is not None:
-            self.admin_thread.join(self.config['stop_timeout'] + self.config['health_timeout'] + 5)
-            if self.admin_thread.is_alive():
-                raise TimeoutError('Owner watchdog shutdown timed out')
+        for name in SIDECARS:
+            thread = getattr(self, name + '_thread')
+            if thread is not None:
+                thread.join(self.config['stop_timeout'] + self.config['health_timeout'] + 5)
+                if thread.is_alive():
+                    raise TimeoutError('Sidecar watchdog shutdown timed out')
         if self.sleep_thread is not None:
             self.sleep_thread.join(5)
             if self.sleep_thread.is_alive():
@@ -439,6 +456,21 @@ def build_config(args):
         config['admin'] = dict(role='admin', host=args.host, port=admin_port, command=admin_command)
     elif getattr(args, 'owner_client', []):
         raise ValueError('--owner-client requires owner controls')
+    vision_binary = getattr(args, 'vision_ollama', None)
+    vision_models = getattr(args, 'vision_models', None)
+    if vision_binary:
+        binary = Path(vision_binary).expanduser().resolve()
+        if not binary.is_file() or not os.access(binary, os.X_OK):
+            raise ValueError('Vision Ollama must be an existing executable')
+        if args.port == 11435 or config.get('admin', {}).get('port') == 11435:
+            raise ValueError('Port 11435 is reserved for the optional vision Ollama')
+        models = Path(vision_models or root / '.local/ollama-vision/models').expanduser().resolve()
+        if models.exists() and not models.is_dir():
+            raise ValueError('Vision models path must be a directory')
+        config['vision_ollama'] = dict(role='vision_ollama', host='127.0.0.1', port=11435,
+                                     command=[str(binary), 'serve'], models_dir=str(models))
+    elif vision_models:
+        raise ValueError('--vision-models requires --vision-ollama')
     if getattr(args, 'tablet_watchdog', False):
         if not (root / 'scripts/tablet-watchdog.py').is_file():
             raise ValueError('Tablet watchdog script missing from release')
@@ -454,6 +486,8 @@ def install(args, state):
         raise ValueError('Port occupied; the runtime owner must stop the previous server first')
     if config.get('admin') and port_occupied(config['admin']['port'], config['admin']['host']):
         raise ValueError('Owner-controls port occupied; its owner must stop it before installation')
+    if config.get('vision_ollama') and port_occupied(11435, '127.0.0.1'):
+        raise ValueError('Vision port occupied; its owner must stop the provisioning server before installation')
     if plist_path().exists():
         raise ValueError('Existing installation; uninstall before replacing its configuration')
     state.mkdir(parents=True, exist_ok=True, mode=0o700)
@@ -504,6 +538,8 @@ def main():
     setup.add_argument('--no-sleep-protection', action='store_true', help='Do not inhibit idle system sleep while service runs')
     setup.add_argument('--tablet-watchdog', action='store_true', help='Opt into restarting a missing Facebot process on one already-authorized USB tablet')
     setup.add_argument('--adb', help='Existing adb executable for optional USB tablet monitoring')
+    setup.add_argument('--vision-ollama', help='Opt into an isolated existing Ollama executable on loopback port 11435')
+    setup.add_argument('--vision-models', help='Dedicated vision model directory; default ROOT/.local/ollama-vision/models')
     for action in ('run', 'start', 'stop', 'restart', 'status', 'uninstall'):
         sub.add_parser(action)
     args = parser.parse_args()
@@ -523,6 +559,8 @@ def main():
         value['healthy_now'] = healthy(config) if config else False
         if config and config.get('admin'):
             value['admin_healthy_now'] = healthy({**config, **config['admin']})
+        if config and config.get('vision_ollama'):
+            value['vision_ollama_healthy_now'] = healthy({**config, **config['vision_ollama']})
         print(json.dumps(value, indent=2))
         return 0
     if sys.platform != 'darwin':
