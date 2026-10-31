@@ -68,6 +68,7 @@ public final class FaceActivity extends ComponentActivity {
         if(halfDuplex) addQuietControls(scene);
         setContentView(scene);
         pairing=getSharedPreferences("owner-pairing",MODE_PRIVATE);
+        quietControl.localHold=pairing.getBoolean("localQuiet",false);
         endpoint=pairing.getString("url",null); token=pairing.getString("token",null);
         characterName=pairing.getString("name","Boo");
         allowPrivateLan=pairing.getBoolean("allowPrivateLan",false);
@@ -175,7 +176,10 @@ public final class FaceActivity extends ComponentActivity {
             if(!resumed || generation!=connectionGeneration) return;
             boolean wasHeld=quietControl.localHold;
             quietControl.serverState(muted);
-            if(wasHeld!=quietControl.localHold && voice!=null) voice.setLocalQuiet(quietControl.localHold);
+            if(wasHeld!=quietControl.localHold) {
+                persistLocalQuiet();
+                if(voice!=null) voice.setLocalQuiet(quietControl.localHold);
+            }
             refreshQuietControls();
         }));
         voice.setVideoListener(event -> main.post(() -> {
@@ -207,6 +211,8 @@ public final class FaceActivity extends ComponentActivity {
     private void addQuietControls(FrameLayout scene) {
         float density=getResources().getDisplayMetrics().density;
         quietPanel=new android.widget.LinearLayout(this);
+        // Video may reorder its panel; elevated controls must remain visible and tappable.
+        quietPanel.setElevation(8*density);
         quietPanel.setOrientation(android.widget.LinearLayout.VERTICAL);
         quietPanel.setGravity(Gravity.CENTER);
         android.widget.LinearLayout row=new android.widget.LinearLayout(this);
@@ -237,16 +243,21 @@ public final class FaceActivity extends ComponentActivity {
         String text=quietControl.status();
         if(!text.contentEquals(quietStatus.getText())) quietStatus.setText(text);
     }
+    private void persistLocalQuiet() {
+        pairing.edit().putBoolean("localQuiet",quietControl.localHold).apply();
+    }
     private void requestQuiet(boolean quiet) {
         if(!resumed || settingsClient==null || quietControl.pending) return;
         int request=quietControl.begin(quiet);
         if(quiet) {
+            persistLocalQuiet();
             if(voice!=null) voice.setLocalQuiet(true);
             if(performanceVideo!=null) performanceVideo.clear();
         }
         refreshQuietControls();
         settingsClient.setQuiet(quiet,success -> {
             if(!quietControl.complete(request,success)) return;
+            persistLocalQuiet();
             if(voice!=null) voice.setLocalQuiet(quietControl.localHold);
             refreshQuietControls();
         });

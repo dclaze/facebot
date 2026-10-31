@@ -125,8 +125,10 @@ final class VoiceClient extends WebSocketListener {
         }
         if (token==null || token.length()<24) { listener.state("Pairing required",false); close(); return; }
         listener.state("Connecting",false);
-        socket=http.newWebSocket(new Request.Builder().url(url).header("Authorization","Bearer "+token)
-            .header("X-Facebot-Capabilities","performance-video-v1,performance-face-v1,playback-probe-v1").build(),this);
+        Request.Builder request=new Request.Builder().url(url).header("Authorization","Bearer "+token)
+            .header("X-Facebot-Capabilities","performance-video-v1,performance-face-v1,playback-probe-v1");
+        if(echoControl.halfDuplex) request.header("X-Facebot-Capture-Profile","lenovo-j606f-raw-v1");
+        socket=http.newWebSocket(request.build(),this);
     }
     @Override public void onOpen(WebSocket ws, Response response) {
         if (closed.get()) { ws.cancel(); return; }
