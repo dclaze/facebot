@@ -19,7 +19,8 @@ final class MouthRenderer {
         {.28f,.053f,.010f,.15f,.75f,1f,0f,.005f}, // L / TH: raised tongue tip
         {.30f,.028f,.013f,0f,.90f,0f,0f,.007f} // S / consonant slot
     };
-    private static final int MINT=Color.rgb(94,235,184), ICE=Color.rgb(206,255,238);
+    private int MINT=Color.rgb(94,235,184), ICE=Color.rgb(206,255,238);
+    void setColors(int mint, int ice) { MINT=mint; ICE=ice; }
     private final Paint paint=new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Path outline=new Path(), detail=new Path();
     private final float[] pose=POSES[0].clone(), start=POSES[0].clone();

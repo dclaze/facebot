@@ -26,7 +26,12 @@ import android.view.WindowManager;
 public final class FaceActivity extends ComponentActivity {
     private final Handler main = new Handler(Looper.getMainLooper());
     private VoiceClient voice;
+    private PerformanceVideo performanceVideo;
+    private SettingsClient settingsClient;
+    private int[] palette={0xFFCEFFEE,0xFF5EEBB8,0xFF09362F,0xFF0C312B,0xFF030F0E};
     private Attention attention;
+    private VisionClient vision;
+    private String sceneLabels = "";
     private PreviewView preview;
     private View cameraOverlay;
     private float gazeX=.5f, gazeY=.5f;
@@ -34,7 +39,12 @@ public final class FaceActivity extends ComponentActivity {
     private String visionState = "Vision starting";
     private FaceView face;
     private boolean resumed;
-    private int connectionGeneration;
+    private int connectionGeneration, failures;
+    private long readySince;
+    private boolean allowPrivateLan, diagnostics, ownerDialog;
+    private static final int OWNER_AUTH=41;
+    private android.content.SharedPreferences pairing;
+    private final Runnable ownerHold=this::authenticateOwner;
     private String endpoint, token, characterName = "Boo", state = "Pairing required";
     private boolean speaking;
     private final Runnable reconnect = this::connectVoice;
@@ -47,51 +57,64 @@ public final class FaceActivity extends ComponentActivity {
         preview.setImplementationMode(PreviewView.ImplementationMode.COMPATIBLE);
         scene.addView(preview, new FrameLayout.LayoutParams(-1,-1));
         scene.addView(face, new FrameLayout.LayoutParams(-1,-1));
+        performanceVideo = new PerformanceVideo(this,scene,()->voice==null?null:voice.playbackPosition());
         setContentView(scene);
-        try (InputStream input = getAssets().open("local-config.json")) {
-            byte[] buffer = new byte[8192];
-            int size = input.read(buffer);
-            if (size <= 0 || input.read() != -1) throw new IllegalArgumentException();
-            JSONObject config = new JSONObject(new String(buffer, 0, size, StandardCharsets.UTF_8));
-            endpoint = config.getString("url"); token = config.getString("token");
-            characterName = config.optString("name", "Boo");
-            // Owner-enabled development preview, not a recording or visitor control.
-            if (config.optBoolean("showCamera", false)) {
-                float density = getResources().getDisplayMetrics().density;
-                FrameLayout.LayoutParams cameraLayout = new FrameLayout.LayoutParams(
-                    (int)(160*density), (int)(120*density), Gravity.TOP | Gravity.END);
-                cameraLayout.setMargins((int)(16*density),(int)(16*density),(int)(16*density),0);
-                preview.setLayoutParams(cameraLayout);
-                preview.bringToFront();
-                preview.setClickable(false);
-                cameraOverlay = new View(this) {
-                    private final Paint marker = new Paint(Paint.ANTI_ALIAS_FLAG);
-                    @Override protected void onDraw(Canvas canvas) {
-                        if (!present) return;
-                        float x=gazeX*getWidth(), y=gazeY*getHeight();
-                        marker.setColor(Color.rgb(94,255,184)); marker.setStrokeWidth(3);
-                        marker.setStyle(Paint.Style.STROKE);
-                        canvas.drawCircle(x,y,18,marker);
-                        canvas.drawLine(x-26,y,x+26,y,marker);
-                        canvas.drawLine(x,y-26,x,y+26,marker);
-                    }
-                };
-                scene.addView(cameraOverlay, new FrameLayout.LayoutParams(cameraLayout));
-            }
-        } catch (Exception ignored) { state = "Pairing required"; }
+        pairing=getSharedPreferences("owner-pairing",MODE_PRIVATE);
+        endpoint=pairing.getString("url",null); token=pairing.getString("token",null);
+        characterName=pairing.getString("name","Boo");
+        allowPrivateLan=pairing.getBoolean("allowPrivateLan",false);
+        diagnostics=pairing.getBoolean("diagnostics",false);
+        // Only the debug source set can contain a private bootstrap. Release has no assets.
+        if(endpoint==null && (getApplicationInfo().flags & android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE)!=0) {
+            try(InputStream input=getAssets().open("local-config.json")) {
+                byte[] bytes=new byte[8192]; int count=input.read(bytes);
+                if(count<=0 || input.read()!=-1) throw new IllegalArgumentException();
+                JSONObject config=new JSONObject(new String(bytes,0,count,StandardCharsets.UTF_8));
+                endpoint=config.getString("url"); token=config.getString("token");
+                characterName=config.optString("name","Boo");
+                allowPrivateLan=config.optBoolean("allowPrivateLan",false);
+            } catch(Exception ignored) { }
+        }
+        if(!ConnectionPolicy.allows(endpoint,allowPrivateLan) || token==null || token.length()<24) {
+            endpoint=null; token=null; state="Owner setup needed";
+        }
+        // Visitors cannot leave the face via Back; system navigation remains OS-controlled.
+        getOnBackPressedDispatcher().addCallback(this,new androidx.activity.OnBackPressedCallback(true) {
+            @Override public void handleOnBackPressed() { immerse(); }
+        });
         if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED ||
             checkSelfPermission(Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED)
             requestPermissions(new String[]{Manifest.permission.RECORD_AUDIO, Manifest.permission.CAMERA}, 1);
         immerse();
     }
     @Override protected void onResume() {
-        super.onResume(); resumed = true; connectVoice(); startAttention();
+        super.onResume(); resumed = true; startConnections();
+    }
+    private void startConnections() {
+        if(ownerDialog) return;
+        if(endpoint==null) state="Owner setup needed";
+        connectVoice();
+        if(endpoint!=null && vision==null) vision=new VisionClient(endpoint,token,allowPrivateLan,
+            labels -> main.post(() -> sceneLabels=labels));
+        if(endpoint!=null && settingsClient==null) {
+            try { settingsClient=new SettingsClient(this,endpoint,token,allowPrivateLan,(name,colors) -> {
+                characterName=name; palette=colors;
+            }); } catch(IllegalArgumentException ignored) { }
+        }
+        startAttention();
     }
     @Override protected void onPause() {
-        resumed = false; connectionGeneration++; main.removeCallbacks(reconnect);
-        if (voice != null) { voice.close(); voice = null; }
-        speaking = false; state = "Muted";
+        resumed = false; stopConnections();
         super.onPause();
+    }
+    private void stopConnections() {
+        connectionGeneration++; main.removeCallbacks(reconnect); main.removeCallbacks(ownerHold);
+        if (voice != null) { voice.close(); voice = null; }
+        if (vision != null) { vision.close(); vision = null; }
+        if(settingsClient!=null) { settingsClient.close(); settingsClient=null; }
+        if(performanceVideo!=null)performanceVideo.clear();
+        sceneLabels="";
+        speaking = false; state = "Muted";
     }
     @Override public void onRequestPermissionsResult(int request, String[] permissions, int[] results) {
         super.onRequestPermissionsResult(request, permissions, results);
@@ -99,35 +122,99 @@ public final class FaceActivity extends ComponentActivity {
     }
     @Override protected void onDestroy() {
         if (attention != null) attention.close();
+        if(performanceVideo!=null)performanceVideo.close();
         super.onDestroy();
     }
     private void startAttention() {
         if (attention != null || checkSelfPermission(Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) return;
         try {
-            attention = new Attention(this, preview, (found, x, y, status, count, analysisMs) -> {
+            attention = new Attention(this, preview, (found, x, y, status, count, analysisMs, faceFill) -> {
                 present = found; gazeX = found ? x : .5f; gazeY = found ? y : .5f;
                 visionState = status+" / "+analysisMs+" ms";
-                if (voice != null && count >= 0) voice.observeScene(count,analysisMs);
+                if (voice != null && count >= 0) voice.observeScene(count,analysisMs,faceFill);
                 if (cameraOverlay != null) cameraOverlay.invalidate();
-            });
+            }, image -> { if(resumed && vision!=null) vision.sample(image); });
         } catch (Exception ignored) { present = false; visionState = "Vision unavailable"; }
     }
     private void connectVoice() {
         main.removeCallbacks(reconnect);
-        if (!resumed || endpoint == null || voice != null) return;
+        if (!resumed || ownerDialog || endpoint == null || voice != null) return;
         if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
             state = "Microphone permission needed"; return;
         }
+        readySince=0;
         final int generation = ++connectionGeneration;
         voice = new VoiceClient(this, (message, talking) -> main.post(() -> {
             if (!resumed || generation != connectionGeneration) return;
             state = message; speaking = talking;
+            if(message.equals("Listening")) {
+                long now=android.os.SystemClock.elapsedRealtime();
+                if(readySince==0) readySince=now;
+                if(now-readySince>10000) failures=0;
+            }
             if (message.equals("Reconnecting")) {
+                connectionGeneration++; // Ignore delayed UI/video events from the dead socket.
                 voice = null;
-                main.removeCallbacks(reconnect); main.postDelayed(reconnect, 1500);
+                if(performanceVideo!=null)performanceVideo.clear();
+                main.removeCallbacks(reconnect); main.postDelayed(reconnect, ConnectionPolicy.retryDelay(++failures));
             }
         }));
-        voice.connect(endpoint, token);
+        voice.setVideoListener(event -> main.post(() -> {
+            if(resumed && generation==connectionGeneration && performanceVideo!=null)
+                performanceVideo.receive(event,endpoint,token,allowPrivateLan);
+        }));
+        voice.connect(endpoint, token,allowPrivateLan);
+    }
+    private void authenticateOwner() {
+        if(ownerDialog || !resumed) return;
+        android.app.KeyguardManager lock=(android.app.KeyguardManager)getSystemService(KEYGUARD_SERVICE);
+        if(lock.isDeviceSecure()) {
+            android.content.Intent challenge=lock.createConfirmDeviceCredentialIntent("Facebot owner setup","Unlock to change pairing or kiosk settings");
+            if(challenge!=null) startActivityForResult(challenge,OWNER_AUTH);
+        } else if(endpoint==null) showOwnerSetup();
+        else new android.app.AlertDialog.Builder(this).setTitle("Protect owner setup")
+            .setMessage("Set an Android screen lock PIN or password to unlock paired Facebot settings.")
+            .setPositiveButton("Android security",(d,w)->startActivity(new android.content.Intent(android.provider.Settings.ACTION_SECURITY_SETTINGS)))
+            .setNegativeButton("Cancel",null).show();
+    }
+    @Override protected void onActivityResult(int request,int result,android.content.Intent data) {
+        super.onActivityResult(request,result,data);
+        if(request==OWNER_AUTH && result==RESULT_OK) main.post(this::showOwnerSetup);
+    }
+    private void showOwnerSetup() {
+        if(ownerDialog) return;
+        ownerDialog=true; stopConnections();
+        android.widget.LinearLayout form=new android.widget.LinearLayout(this);
+        form.setOrientation(android.widget.LinearLayout.VERTICAL);
+        int pad=(int)(20*getResources().getDisplayMetrics().density); form.setPadding(pad,pad,pad,pad);
+        android.widget.TextView help=new android.widget.TextView(this);
+        help.setText("Pair with your Facebot host on the same Wi-Fi. Owner settings use your Android screen lock. Hold the upper-left corner for 5 seconds to return.");form.addView(help);
+        android.widget.EditText url=new android.widget.EditText(this);url.setHint("wss://host/voice");url.setSingleLine(true);url.setText(endpoint==null?"":endpoint);form.addView(url);
+        android.widget.EditText secret=new android.widget.EditText(this);secret.setHint("Pairing token");secret.setSingleLine(true);
+        secret.setInputType(android.text.InputType.TYPE_CLASS_TEXT|android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD);
+        secret.setText(token==null?"":token);form.addView(secret);
+        android.widget.CheckBox lan=new android.widget.CheckBox(this);lan.setText("Allow unencrypted private LAN (trusted Wi-Fi only)");lan.setChecked(allowPrivateLan);form.addView(lan);
+        android.widget.CheckBox debug=new android.widget.CheckBox(this);debug.setText("Show owner diagnostics");debug.setChecked(diagnostics);form.addView(debug);
+        android.widget.Button wifi=new android.widget.Button(this);wifi.setText("Wi-Fi settings");form.addView(wifi);
+        wifi.setOnClickListener(v->startActivity(new android.content.Intent(android.provider.Settings.ACTION_WIFI_SETTINGS)));
+        android.widget.Button home=new android.widget.Button(this);home.setText("Choose default Home app (optional)");form.addView(home);
+        home.setOnClickListener(v->startActivity(new android.content.Intent(android.provider.Settings.ACTION_HOME_SETTINGS)));
+        android.widget.Button pin=new android.widget.Button(this);pin.setText("Pin Facebot to screen (optional)");form.addView(pin);
+        android.widget.TextView limits=new android.widget.TextView(this);limits.setText("Default Home can bring Facebot back after restart. Screen pinning resists accidental touches; Android still controls exit gestures, power and system dialogs. No device-owner enrollment is performed.");form.addView(limits);
+        android.widget.ScrollView scroll=new android.widget.ScrollView(this);scroll.addView(form);
+        android.app.AlertDialog dialog=new android.app.AlertDialog.Builder(this).setTitle("Facebot · Owner setup")
+            .setView(scroll).setPositiveButton("Save & connect",null).setNegativeButton("Cancel",null).create();
+        dialog.setOnDismissListener(d->{ownerDialog=false; if(resumed) startConnections(); immerse();});
+        dialog.show();
+        pin.setOnClickListener(v->{dialog.dismiss();startLockTask();});
+        dialog.getButton(android.app.AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{
+            String nextUrl=url.getText().toString().trim(), nextToken=secret.getText().toString().trim();
+            if(!ConnectionPolicy.allows(nextUrl,lan.isChecked())) { url.setError("Use wss://host/voice, or opt in to ws://private IPv4:port/voice");return; }
+            if(nextToken.length()<24 || nextToken.length()>512 || !nextToken.matches("[!-~]+")) { secret.setError("Enter the host pairing token (24–512 characters)");return; }
+            endpoint=nextUrl;token=nextToken;allowPrivateLan=lan.isChecked();diagnostics=debug.isChecked();failures=0;
+            pairing.edit().putString("url",endpoint).putString("token",token).putBoolean("allowPrivateLan",allowPrivateLan).putBoolean("diagnostics",diagnostics).apply();
+            dialog.dismiss();
+        });
     }
     @Override public void onWindowFocusChanged(boolean focused) {
         super.onWindowFocusChanged(focused);
@@ -136,6 +223,7 @@ public final class FaceActivity extends ComponentActivity {
     @Override protected void onNewIntent(android.content.Intent intent) {
         super.onNewIntent(intent); setIntent(intent);
         if (intent.getBooleanExtra("renderFacePreview",false)) renderFacePreview();
+        if (intent.getBooleanExtra("renderCaptionPreview",false)) renderCaptionPreview();
     }
     private void renderFacePreview() {
         if ((getApplicationInfo().flags & android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE)==0 || face.getWidth()==0) return;
@@ -150,6 +238,24 @@ public final class FaceActivity extends ComponentActivity {
         }
         face.previewShape=null;
     }
+    private void renderCaptionPreview() {
+        if((getApplicationInfo().flags & android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE)==0 || face.getWidth()==0)return;
+        String previous=face.previewShape;
+        String[] phrases={"I have a name.","Mill Valley Planning Department","Café — happy Halloween!","WWWWWWWWWWWWWWWWWWWWWWWWWWWWWW"};
+        try {
+            face.previewShape="open";
+            for(int[] size:new int[][]{{600,1000},{1000,600}})for(int index=0;index<phrases.length;index++) {
+                android.graphics.Bitmap image=android.graphics.Bitmap.createBitmap(size[0],size[1],android.graphics.Bitmap.Config.ARGB_8888);
+                Canvas canvas=new Canvas(image);canvas.save();
+                canvas.scale((float)size[0]/face.getWidth(),(float)size[1]/face.getHeight());face.draw(canvas);canvas.restore();
+                new CaptionRenderer().draw(canvas,phrases[index],size[0],size[1],0);
+                try(java.io.FileOutputStream output=openFileOutput("caption-"+size[0]+"x"+size[1]+"-"+index+".png",MODE_PRIVATE)) {
+                    image.compress(android.graphics.Bitmap.CompressFormat.PNG,100,output);
+                } catch(java.io.IOException ignored) { }
+                image.recycle();
+            }
+        } finally {face.previewShape=previous;}
+    }
     private void immerse() {
         getWindow().getDecorView().setSystemUiVisibility(
             View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY | View.SYSTEM_UI_FLAG_FULLSCREEN |
@@ -161,9 +267,16 @@ public final class FaceActivity extends ComponentActivity {
         private final Path shape = new Path();
         private float lookX=.5f, lookY=.5f;
         private final MouthRenderer mouthRenderer=new MouthRenderer();
+        private final CaptionRenderer captionRenderer=new CaptionRenderer();
         String previewShape;
         FaceView() { super(FaceActivity.this); setBackgroundColor(Color.BLACK); }
-        @Override public boolean onTouchEvent(MotionEvent event) { return true; }
+        @Override public boolean onTouchEvent(MotionEvent event) {
+            if(event.getActionMasked()==MotionEvent.ACTION_DOWN && event.getX()<getWidth()*.14f && event.getY()<getHeight()*.14f)
+                main.postDelayed(ownerHold,5000);
+            if(event.getActionMasked()==MotionEvent.ACTION_UP || event.getActionMasked()==MotionEvent.ACTION_CANCEL ||
+                event.getPointerCount()>1 || event.getX()>getWidth()*.14f || event.getY()>getHeight()*.14f) main.removeCallbacks(ownerHold);
+            return true;
+        }
         private void fill(int color) { paint.setShader(null); paint.setStyle(Paint.Style.FILL); paint.setColor(color); }
         private void curve(Canvas c,float ax,float ay,float bx,float by,float cx,float cy,float width,int color) {
             shape.reset(); shape.moveTo(ax,ay); shape.quadTo(bx,by,cx,cy);
@@ -177,18 +290,24 @@ public final class FaceActivity extends ComponentActivity {
             lookX+=(gazeX-lookX)*.18f; lookY+=(gazeY-lookY)*.18f;
             float dx=(lookX-.5f)*.10f, dy=(lookY-.5f)*.045f;
             float bob=(float)Math.sin(t*1.6)*.006f;
-            int ice=Color.rgb(206,255,238), mint=Color.rgb(94,235,184), deep=Color.rgb(9,54,47);
+            int ice=palette[0], mint=palette[1], deep=palette[2];
+            mouthRenderer.setColors(mint,ice);
             canvas.save(); canvas.scale(w,h); canvas.translate(0,bob);
             // A faint halo gives the disembodied face depth without a rectangular panel.
             paint.setShader(new RadialGradient(.5f,.47f,.49f,
-                new int[]{Color.rgb(12,49,43),Color.rgb(3,15,14),Color.BLACK},null,Shader.TileMode.CLAMP));
+                new int[]{palette[3],palette[4],Color.BLACK},null,Shader.TileMode.CLAMP));
             canvas.drawRect(0,0,1,1,paint); paint.setShader(null);
             float blink=t%5.3<.12 ? .10f : 1f;
+            String reaction=voice!=null?voice.expression():"neutral";
+            if(reaction.equals("wolf_eyes")) { ice=Color.rgb(255,220,80);mint=Color.rgb(255,138,39);deep=Color.rgb(60,24,6); }
+
             for(int side=0;side<2;side++) {
                 float cx=side==0?.29f:.71f;
                 float cy=(side==0?.395f:.375f)+dy*.3f;
-                canvas.save(); canvas.rotate(side==0?-8:9,cx,cy);
-                canvas.scale(1,blink,cx,cy);
+                canvas.save(); canvas.rotate(reaction.equals("wolf_eyes")?(side==0?18:-18):(side==0?-8:9),cx,cy);
+                float expressionScale=(reaction.equals("scared")||reaction.equals("surprised"))?1.35f:
+                    (reaction.equals("wolf_eyes"))?.62f:(reaction.equals("skeptical") && side==0)?.5f:1f;
+                canvas.scale(1,blink*expressionScale,cx,cy);
                 fill(deep); canvas.drawOval(cx-.182f,cy-.091f,cx+.182f,cy+.096f,paint);
                 fill(ice); canvas.drawOval(cx-.163f,cy-.078f,cx+.163f,cy+.078f,paint);
                 // Large moving pupils make attention visible from across the room.
@@ -207,11 +326,24 @@ public final class FaceActivity extends ComponentActivity {
             curve(canvas,.19f,.548f,.21f,.528f,.25f,.530f,.009f,mint);
             curve(canvas,.76f,.510f,.80f,.495f,.82f,.518f,.009f,ice);
             canvas.restore();
+            String caption=previewShape==null && voice!=null && !performanceVideo.isVisible()?voice.captionText():"";
+            if(caption.isEmpty()) {
             fill(mint);paint.setTextAlign(Paint.Align.CENTER);
             paint.setTypeface(android.graphics.Typeface.create("sans-serif-condensed",android.graphics.Typeface.BOLD));
-            paint.setTextSize(w*.036f);canvas.drawText(characterName.toUpperCase(java.util.Locale.ROOT),w*.5f,h*.83f,paint);
-            paint.setTypeface(android.graphics.Typeface.DEFAULT);paint.setTextSize(w*.023f);paint.setAlpha(160);
-            canvas.drawText(previewShape!=null?"SYNTHETIC / "+previewShape:state+"  /  "+visionState,w*.5f,h*.875f,paint);paint.setAlpha(255);
+            paint.setTextSize(w*.045f);canvas.drawText(characterName.toUpperCase(java.util.Locale.ROOT),w*.5f,h*.80f,paint);
+            paint.setTypeface(android.graphics.Typeface.DEFAULT);paint.setTextSize(w*.031f);paint.setAlpha(190);
+            String visitorState=state.equals("Listening") ? "Say hello" : state.equals("Reconnecting") || state.equals("Connecting") ? "One moment… reconnecting" : state;
+            canvas.drawText(previewShape!=null?"SYNTHETIC / "+previewShape:visitorState,w*.5f,h*.85f,paint);paint.setAlpha(255);
+            if(endpoint==null) { paint.setTextSize(w*.024f);canvas.drawText("Owner: hold the upper-left corner for 5 seconds",w*.5f,h*.90f,paint); }
+            if(diagnostics) { paint.setTextSize(w*.022f);canvas.drawText(visionState,w*.5f,h*.94f,paint); }
+            if(diagnostics && !sceneLabels.isEmpty()) {
+                paint.setTextSize(w*.018f);paint.setAlpha(140);
+                canvas.drawText("Seeing: "+sceneLabels,w*.5f,h*.915f,paint);paint.setAlpha(255);
+            }
+            } else {
+                android.view.WindowInsets insets=getRootWindowInsets();
+                captionRenderer.draw(canvas,caption,w,h,insets!=null?insets.getStableInsetBottom():0);
+            }
             postInvalidateOnAnimation();
         }
     }

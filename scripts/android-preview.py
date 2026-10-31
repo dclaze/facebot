@@ -30,7 +30,7 @@ def main():
         run('shell', 'am', 'force-stop', 'org.facebot')
         print('Android app force-stopped. Physical silence still requires observation.')
         return 0
-    config = root / 'android/app/src/main/assets/local-config.json'
+    config = root / 'android/app/src/debug/assets/local-config.json'
     apk = root / 'android/app/build/outputs/apk/debug/app-debug.apk'
     if not config.exists() or not apk.exists() or apk.stat().st_mtime < config.stat().st_mtime:
         raise RuntimeError('Build the private paired APK before starting the preview')

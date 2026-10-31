@@ -20,12 +20,27 @@ final class VoiceClient extends WebSocketListener {
     interface Listener { void state(String state, boolean speaking); }
     private final Context context;
     private final Listener listener;
-    private final OkHttpClient http = new OkHttpClient.Builder().pingInterval(10, TimeUnit.SECONDS).build();
+    private final OkHttpClient http = new OkHttpClient.Builder().connectTimeout(5, TimeUnit.SECONDS).pingInterval(5, TimeUnit.SECONDS).followRedirects(false).followSslRedirects(false).build();
     private final ExecutorService control = Executors.newSingleThreadExecutor();
     private final PlaybackQueue output = new PlaybackQueue();
     private final AtomicBoolean closed = new AtomicBoolean(false);
     private final Object audioLock = new Object();
     private final ArrayDeque<MouthCue> mouthCues = new ArrayDeque<>();
+    private final CaptionTimeline captions = new CaptionTimeline();
+    private long writtenSamples;
+    private java.util.function.Consumer<JSONObject> videoListener=event -> {};
+    void setVideoListener(java.util.function.Consumer<JSONObject> listener){videoListener=listener;}
+    static final class PlaybackPosition {
+        final long epoch,sample;final boolean playing;
+        PlaybackPosition(long epoch,long sample,boolean playing){this.epoch=epoch;this.sample=sample;this.playing=playing;}
+    }
+    PlaybackPosition playbackPosition(){
+        synchronized(audioLock){
+            if(player==null || closed.get())return null;
+            long sample=Integer.toUnsignedLong(player.getPlaybackHeadPosition());
+            return new PlaybackPosition(epoch,sample,sample<writtenSamples);
+        }
+    }
     private static final class MouthCue {
         final long start, end; final String shape;
         MouthCue(long start,long end,String shape) { this.start=start;this.end=end;this.shape=shape; }
@@ -42,6 +57,18 @@ final class VoiceClient extends WebSocketListener {
     private boolean captureObserved, playbackObserved;
     private long lastSceneSent;
     private int lastFaceCount = -1;
+    private final PerformanceFaceCue performanceFace=new PerformanceFaceCue();
+    private volatile String expression = "neutral";
+    private volatile long expressionUntil;
+    String expression() {
+        synchronized(audioLock) {
+            if(player!=null && !closed.get()) {
+                String cue=performanceFace.at(epoch,Integer.toUnsignedLong(player.getPlaybackHeadPosition()),writtenSamples);
+                if(!cue.isEmpty()) return cue;
+            }
+        }
+        return android.os.SystemClock.elapsedRealtime()<expressionUntil ? expression : "neutral";
+    }
     VoiceClient(Context context, Listener listener) { this.context=context; this.listener=listener; }
     String mouthShape() {
         synchronized(audioLock) {
@@ -52,26 +79,34 @@ final class VoiceClient extends WebSocketListener {
             return cue!=null && cue.start<=sample ? cue.shape : "rest";
         }
     }
+    String captionText() {
+        synchronized(audioLock) {
+            if(player==null || closed.get()) return "";
+            long sample=Integer.toUnsignedLong(player.getPlaybackHeadPosition());
+            String text=captions.textAt(sample);
+            return sample<writtenSamples ? text : "";
+        }
+    }
     /** Called on the main camera-result executor; drops updates behind audio. */
-    void observeScene(int faces, long analysisMs) {
+    void observeScene(int faces, long analysisMs, int faceFill) {
         long now=android.os.SystemClock.elapsedRealtime();
         if (closed.get() || socket==null || analysisMs<0 || analysisMs>500 || faces<0 || socket.queueSize()>1280) return;
         if (now-lastSceneSent<100 || (faces==lastFaceCount && now-lastSceneSent<250)) return;
         try {
             JSONObject event=new JSONObject();
             event.put("type","scene"); event.put("visible_faces",Math.min(32,faces)); event.put("overflow",faces>32); event.put("age_ms",analysisMs);
+            event.put("face_fill",Math.max(0,Math.min(1000,faceFill)));
             if (socket.send(event.toString())) { lastSceneSent=now; lastFaceCount=faces; }
         } catch(Exception ignored) { /* Vision must not block or tear down audio. */ }
     }
-    void connect(String url, String token) {
-        // Plaintext is restricted to authorized USB reverse / simulator loopback.
-        HttpUrl endpoint=HttpUrl.parse(url.replaceFirst("^ws", "http"));
-        if (endpoint==null || (!endpoint.isHttps() && !endpoint.host().equals("127.0.0.1") && !endpoint.host().equals("localhost"))) {
-            listener.state("Secure connection required", false); close(); return;
+    void connect(String url, String token, boolean allowPrivateLan) {
+        if (!ConnectionPolicy.allows(url,allowPrivateLan)) {
+            listener.state("Check owner connection settings", false); close(); return;
         }
-        if (token.length()<24) { listener.state("Pairing required",false); close(); return; }
+        if (token==null || token.length()<24) { listener.state("Pairing required",false); close(); return; }
         listener.state("Connecting",false);
-        socket=http.newWebSocket(new Request.Builder().url(url).header("Authorization","Bearer "+token).build(),this);
+        socket=http.newWebSocket(new Request.Builder().url(url).header("Authorization","Bearer "+token)
+            .header("X-Facebot-Capabilities","performance-video-v1,performance-face-v1").build(),this);
     }
     @Override public void onOpen(WebSocket ws, Response response) {
         if (closed.get()) { ws.cancel(); return; }
@@ -139,6 +174,7 @@ final class VoiceClient extends WebSocketListener {
                     synchronized(audioLock) {
                         if(player==null || p.epoch!=epoch) break;
                         n=player.write(p.pcm,offset,Math.min(960,p.pcm.length-offset),AudioTrack.WRITE_NON_BLOCKING);
+                        if(n>0) writtenSamples+=n/2;
                     }
                     if(n<0) { fail(); return; }
                     offset+=n;
@@ -172,7 +208,28 @@ final class VoiceClient extends WebSocketListener {
         if(closed.get()) return;
         try {
             JSONObject event=new JSONObject(message);
-            if(event.getString("type").equals("interrupt")) flush(event.getLong("epoch"));
+            if(event.getString("type").equals("interrupt")) { expressionUntil=0; flush(event.getLong("epoch")); }
+            else if(event.getString("type").equals("performance_video")) {
+                long incoming=event.getLong("epoch");
+                if(incoming<epoch)return;
+                if(incoming>epoch)flush(incoming);
+                videoListener.accept(event);
+            }
+            else if(event.getString("type").equals("performance_face")) {
+                long incoming=event.getLong("epoch");
+                if(incoming<epoch) return;
+                if(incoming>epoch) flush(incoming);
+                synchronized(audioLock) {
+                    performanceFace.set(incoming,event.getLong("offset"),event.getLong("duration_samples"),event.getString("name"));
+                }
+            }
+            else if(event.getString("type").equals("expression")) {
+                String name=event.getString("name"); int duration=event.getInt("duration_ms");
+                if(event.getLong("epoch")==epoch && duration>=100 && duration<=2500 &&
+                    Arrays.asList("neutral","skeptical","surprised","scared","pleased").contains(name)) {
+                    expression=name; expressionUntil=android.os.SystemClock.elapsedRealtime()+duration;
+                }
+            }
             else if(event.getString("type").equals("visemes")) {
                 long incoming=event.getLong("epoch");
                 if(incoming<epoch) return;
@@ -181,6 +238,17 @@ final class VoiceClient extends WebSocketListener {
                 JSONArray cues=event.getJSONArray("cues");
                 if(cues.length()>1024 || offset<0) { fail(); return; }
                 synchronized(audioLock) {
+                    if(event.has("captions")) {
+                        JSONArray values=event.getJSONArray("captions");
+                        java.util.ArrayList<CaptionTimeline.Cue> batch=new java.util.ArrayList<>();
+                        if(values.length()>512) throw new IllegalArgumentException();
+                        for(int i=0;i<values.length();i++) {
+                            JSONArray cue=values.getJSONArray(i);
+                            if(cue.length()!=3) throw new IllegalArgumentException();
+                            batch.add(new CaptionTimeline.Cue(cue.getLong(0),cue.getLong(1),cue.getString(2)));
+                        }
+                        captions.append(incoming,offset,batch);
+                    }
                     if(mouthCues.size()+cues.length()>2048) throw new IllegalArgumentException();
                     long previous=-1;
                     for(int i=0;i<cues.length();i++) {
@@ -199,18 +267,26 @@ final class VoiceClient extends WebSocketListener {
     private void flush(long next) {
         synchronized(audioLock) {
             if(next<epoch) return;
-            epoch=next; output.clear(); mouthCues.clear();
+            epoch=next; performanceFace.reset(); output.clear(); mouthCues.clear(); captions.reset(next); writtenSamples=0;
             if(player!=null) { player.pause(); player.flush(); if(!closed.get()) player.play(); }
         }
         listener.state("Listening",false);
     }
     @Override public void onFailure(WebSocket ws,Throwable error,Response response) { fail(); }
     @Override public void onClosed(WebSocket ws,int code,String reason) { fail(); }
-    private void fail() { if(!closed.get()) { listener.state("Reconnecting",false); close(); } }
+    private void fail() {
+        if(closed.get()) return;
+        close();
+        listener.state("Reconnecting",false);
+    }
     void close() {
         if(!closed.compareAndSet(false,true)) return;
         if(socket!=null) socket.cancel();
         output.clear();
+        synchronized(audioLock) {
+            mouthCues.clear(); captions.reset(epoch); performanceFace.reset();
+            if(player!=null) { try { player.pause(); player.flush(); } catch(IllegalStateException ignored) { } }
+        }
         control.execute(() -> {
             try {
                 if(recorder!=null) recorder.stop();
