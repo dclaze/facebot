@@ -190,8 +190,15 @@ class ImageLabeler:
             })
             response.raise_for_status()
             result = response.json()
-            message = result.get('message', {})
-            self.state.last_reply_shape = {'content_chars': len(message.get('content','')), 'thinking_chars': len(message.get('thinking','')), 'generated_tokens': result.get('eval_count')}
+            message = result.get('message')
+            diagnostic_message = message if isinstance(message, dict) else {}
+            self.state.last_reply_shape = {
+                key + '_chars': len(value) if isinstance(value, str) else None
+                for key in ('content', 'thinking')
+                for value in (diagnostic_message.get(key, ''),)
+            }
+            token_count = result.get('eval_count')
+            self.state.last_reply_shape['generated_tokens'] = token_count if type(token_count) is int else None
             if result.get('done_reason') == 'length':
                 raise ValueError('Truncated labels')
             message = result.get('message')
