@@ -164,3 +164,27 @@ verification.
 ### Manufacturer floating controls
 
 Some Lenovo tablets expose **Smart Navigation** in Android Settings. Its floating edge handle can remain visible above an immersive app. If present on your tablet, turn that switch off for the kiosk and record its previous state so you can restore it afterward. This is separate from Android system navigation, screen pinning and owner authentication; turning off the handle does not lock the device. The tested tablet resumed voice and fresh vision after returning from Settings. Other manufacturers and Android versions may use different controls.
+
+### Recognition timing diagnostics
+
+Authenticated `/diagnostics` includes `transcription.timing`, with the last16
+content-free receipts for the current voice connection. The optional existing
+private recorder also emits `transcription_timing`; this does not enable recording
+or retain new audio, transcript text, thread/model identifiers or exception text.
+
+`prepare_ms` covers entry through PCM preparation; `queue_ms` covers submission
+through actual worker entry, including asyncio dispatch; `transcribe_ms` measures
+the recognizer call on that worker. `result_ms` includes returning to the event
+loop and selecting the result. `total_ms` ends after result selection, before
+transcript delivery, and is the sum of those four phases (rounding aside).
+These are host elapsed times, not GPU execution or acoustic latency. Existing
+`transcription_quality.inference_ms` remains unchanged and includes more than
+the recognizer call alone.
+
+Turns cancelled after dispatch but before selection retain native-worker busy ownership until the shielded task
+actually finishes, then emit one cancelled receipt. Their `total_ms` and
+`result_ms` are null because no result was selected; `cancelled_after_ms` and
+`worker_completion_ms` distinguish cancellation from actual worker completion.
+Unavailable phases, including work that failed before dispatch, are null rather
+than zero. This instrumentation diagnoses slow first requests; it does not change
+model warmup, worker affinity, VAD thresholds or recognition behavior.
