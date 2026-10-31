@@ -1,5 +1,5 @@
 # Private installation context and local agent handoffs
-.local/
+.local
 .env
 .env.*
 !.env.example
@@ -15,7 +15,7 @@ logs/
 *.log
 # Development outputs
 .DS_Store
-.venv/
+.venv
 __pycache__/
 node_modules/
 dist/
@@ -34,3 +34,6 @@ ios/local-config.json
 
 # Private debug bootstrap; public release never reads this source set.
 android/app/src/debug/assets/
+
+# Local owner workshop preview link; public packs live under content/kiosk.
+/content/experiences
