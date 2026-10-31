@@ -47,6 +47,7 @@ public final class FaceActivity extends ComponentActivity {
     private final Runnable ownerHold=this::authenticateOwner;
     private String endpoint, token, characterName = "Boo", state = "Pairing required";
     private boolean speaking;
+    private String accessibilityDescription="";
     private final Runnable reconnect = this::connectVoice;
     @Override public void onCreate(Bundle savedState) {
         super.onCreate(savedState);
@@ -85,6 +86,7 @@ public final class FaceActivity extends ComponentActivity {
         if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED ||
             checkSelfPermission(Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED)
             requestPermissions(new String[]{Manifest.permission.RECORD_AUDIO, Manifest.permission.CAMERA}, 1);
+        refreshAccessibility();
         immerse();
     }
     @Override protected void onResume() {
@@ -93,12 +95,13 @@ public final class FaceActivity extends ComponentActivity {
     private void startConnections() {
         if(ownerDialog) return;
         if(endpoint==null) state="Owner setup needed";
+        refreshAccessibility();
         connectVoice();
         if(endpoint!=null && vision==null) vision=new VisionClient(endpoint,token,allowPrivateLan,
             labels -> main.post(() -> sceneLabels=labels));
         if(endpoint!=null && settingsClient==null) {
             try { settingsClient=new SettingsClient(this,endpoint,token,allowPrivateLan,(name,colors) -> {
-                characterName=name; palette=colors;
+                characterName=name; palette=colors; refreshAccessibility();
             }); } catch(IllegalArgumentException ignored) { }
         }
         startAttention();
@@ -114,7 +117,7 @@ public final class FaceActivity extends ComponentActivity {
         if(settingsClient!=null) { settingsClient.close(); settingsClient=null; }
         if(performanceVideo!=null)performanceVideo.clear();
         sceneLabels="";
-        speaking = false; state = "Muted";
+        speaking = false; state = "Muted"; refreshAccessibility();
     }
     @Override public void onRequestPermissionsResult(int request, String[] permissions, int[] results) {
         super.onRequestPermissionsResult(request, permissions, results);
@@ -140,13 +143,13 @@ public final class FaceActivity extends ComponentActivity {
         main.removeCallbacks(reconnect);
         if (!resumed || ownerDialog || endpoint == null || voice != null) return;
         if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
-            state = "Microphone permission needed"; return;
+            state = "Microphone permission needed"; refreshAccessibility(); return;
         }
         readySince=0;
         final int generation = ++connectionGeneration;
         voice = new VoiceClient(this, (message, talking) -> main.post(() -> {
             if (!resumed || generation != connectionGeneration) return;
-            state = message; speaking = talking;
+            state = message; speaking = talking; refreshAccessibility();
             if(message.equals("Listening") || message.equals("Quiet mode")) {
                 long now=android.os.SystemClock.elapsedRealtime();
                 if(readySince==0) readySince=now;
@@ -164,6 +167,25 @@ public final class FaceActivity extends ComponentActivity {
                 performanceVideo.receive(event,endpoint,token,allowPrivateLan);
         }));
         voice.connect(endpoint, token,allowPrivateLan);
+    }
+    private void refreshAccessibility() {
+        if(face==null) return;
+        String status;
+        switch(state) {
+            case "Listening": status="Ready to listen.";break;
+            case "Quiet mode": status="Quiet mode. Speech output is paused. The microphone remains active for resume.";break;
+            case "Muted": status="Microphone paused.";break;
+            case "Connecting": status="Connecting to the host.";break;
+            case "Reconnecting": status="Reconnecting to the host.";break;
+            default: status=state+".";
+        }
+        String description=characterName+". "+status+" Owner setup is available in accessibility actions.";
+        // Called by actual state/name changes, never by drawing or gaze updates.
+        // Identical playback-ready ticks do not repeatedly announce themselves.
+        if(!description.equals(accessibilityDescription)) {
+            accessibilityDescription=description;
+            face.setContentDescription(description);
+        }
     }
     private void authenticateOwner() {
         if(ownerDialog || !resumed) return;
@@ -269,7 +291,23 @@ public final class FaceActivity extends ComponentActivity {
         private final MouthRenderer mouthRenderer=new MouthRenderer();
         private final CaptionRenderer captionRenderer=new CaptionRenderer();
         String previewShape;
-        FaceView() { super(FaceActivity.this); setBackgroundColor(Color.BLACK); }
+        FaceView() {
+            super(FaceActivity.this); setBackgroundColor(Color.BLACK);
+            setFocusable(true); setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_YES);
+            setAccessibilityLiveRegion(View.ACCESSIBILITY_LIVE_REGION_POLITE);
+        }
+        @Override public void onInitializeAccessibilityNodeInfo(android.view.accessibility.AccessibilityNodeInfo info) {
+            super.onInitializeAccessibilityNodeInfo(info);
+            info.addAction(new android.view.accessibility.AccessibilityNodeInfo.AccessibilityAction(
+                R.id.facebot_owner_setup,"Owner setup"));
+        }
+        @Override public boolean performAccessibilityAction(int action,Bundle arguments) {
+            if(action==R.id.facebot_owner_setup) {
+                authenticateOwner(); // Same credential boundary as the five-second touch gesture.
+                return true;
+            }
+            return super.performAccessibilityAction(action,arguments);
+        }
         @Override public boolean onTouchEvent(MotionEvent event) {
             if(event.getActionMasked()==MotionEvent.ACTION_DOWN && event.getX()<getWidth()*.14f && event.getY()<getHeight()*.14f)
                 main.postDelayed(ownerHold,5000);
