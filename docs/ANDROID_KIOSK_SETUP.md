@@ -72,3 +72,13 @@ On Lenovo TB-J606F running Android 11, Facebot uses a narrow half-duplex compati
 The profile uses voice-recognition capture, makes no explicit AEC request, leaves communication-mode/speaker routing alone, and plays through the media audio stream. Adjust the tablet's **media volume** for the face. While output is queued or still playing, and for a 600 ms echo/capture-buffer tail, captured PCM is replaced with silence before transmission. Capture and connection timing continue, but speech interruption is unavailable during that interval: wait until the face finishes before saying stop, resume or another request. The affected-profile screen includes accessible **Quiet** and **Resume** buttons above the face, including during video performances. Quiet immediately holds local output and asynchronously asks the authenticated host to persist quiet mode. A failed request displays **Paused here · host not confirmed** and keeps local output held; retry Quiet or tap Resume. Resume releases the local hold only after a successful host response. Spoken stop/resume remains available while idle, and a host quiet-to-resume transition also releases the hold. These visitor controls do not expose owner pairing settings. Other devices retain the existing full-duplex AEC path. The tail is a conservative workaround, not measured acoustic latency or software echo cancellation.
 
 This is an app-scoped mitigation, not a repair or disablement of the vendor audio/Dolby services. A driver or SystemUI crash can still hide the app behind the lock screen, which the optional process watchdog cannot unlock. Repeated actual playback, reconnection, and post-playback speech checks on the affected tablet are required before claiming the mitigation resolved the observed failure. Android's source-specific preprocessing behavior is documented in [Configure preprocessing effects](https://source.android.com/docs/core/audio/implement-pre-processing).
+
+The affected Lenovo profile identifies its raw capture path with
+`X-Facebot-Capture-Profile: lenovo-j606f-raw-v1`. The host applies a fixed 4x gain
+only to Silero's speech-confidence analysis buffer for that exact profile;
+recorded/transmitted microphone PCM, ASR input, volume threshold, confidence
+threshold and onset/stop durations remain unchanged. Other profiles use 1x.
+Controlled microphone replay recovered short low-amplitude greetings that the
+unchanged detector missed, while the tested quiet/noise controls stayed quiet.
+This is a bounded replay result, not a general noise-accuracy guarantee. Owner
+`/diagnostics` exposes the effective VAD profile and parameters for verification.

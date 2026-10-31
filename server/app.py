@@ -12,8 +12,7 @@ import sys
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, WebSocket, Header, HTTPException
 from loguru import logger
-from pipecat.audio.vad.silero import SileroVADAnalyzer
-from pipecat.audio.vad.vad_analyzer import VADParams
+from server.capture_vad import CaptureVAD
 from pipecat.pipeline.pipeline import Pipeline
 from pipecat.pipeline.runner import PipelineRunner
 from pipecat.pipeline.task import PipelineTask, PipelineParams
@@ -180,6 +179,7 @@ def create_app(token, engine=None):
         report['mute'] = {'enabled': mute.value, 'persistence_error': mute.error}
         report['recording'] = recorder.report()
         report['transcription'] = current_interaction.stt.report() if current_interaction else None
+        report['vad'] = current_interaction.vad.report() if current_interaction else None
         report['scripted_quips'] = quips.report() if quips else {'enabled': False}
         report['sound_effects'] = current_interaction.sound_performance.report() if current_interaction else None
         report['voice_state'] = ({
@@ -286,8 +286,9 @@ def create_app(token, engine=None):
                 audio_in_sample_rate=16000, audio_out_sample_rate=24000,
                 serializer=codec, allowed_origins=[]))
             context = LLMContext([{'role':'system','content':instructions(settings.read()['character_name'])}])
+            interaction.vad = CaptureVAD(ws.headers.get('x-facebot-capture-profile', ''))
             pair = LLMContextAggregatorPair(context, user_params=LLMUserAggregatorParams(
-                vad_analyzer=SileroVADAnalyzer(params=VADParams(start_secs=.1, stop_secs=.45)),
+                vad_analyzer=interaction.vad,
                 user_turn_strategies=UserTurnStrategies(stop=[SpeechTimeoutUserTurnStopStrategy(user_speech_timeout=.25)])))
             stt = LocalSTT(recorder=recorder, settings=LocalSTT.Settings(
                 model=STT_MODEL))
