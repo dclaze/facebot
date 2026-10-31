@@ -36,6 +36,8 @@ public final class FaceActivity extends ComponentActivity {
     private android.widget.TextView quietStatus;
     private int[] palette={0xFFCEFFEE,0xFF5EEBB8,0xFF09362F,0xFF0C312B,0xFF030F0E};
     private Attention attention;
+    private final ThermalCadence thermalCadence=new ThermalCadence();
+    private ThermalMonitor thermalMonitor;
     private VisionClient vision;
     private String sceneLabels = "";
     private PreviewView preview;
@@ -59,6 +61,7 @@ public final class FaceActivity extends ComponentActivity {
         super.onCreate(savedState);
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         face = new FaceView();
+        thermalMonitor=new ThermalMonitor(this,status -> { thermalCadence.setStatus(status); face.invalidate(); });
         FrameLayout scene = new FrameLayout(this);
         preview = new PreviewView(this);
         preview.setImplementationMode(PreviewView.ImplementationMode.COMPATIBLE);
@@ -97,8 +100,16 @@ public final class FaceActivity extends ComponentActivity {
         refreshAccessibility();
         immerse();
     }
+    @Override protected void onStart() {
+        super.onStart();
+        if(thermalMonitor!=null) thermalMonitor.start();
+    }
+    @Override protected void onStop() {
+        if(thermalMonitor!=null) thermalMonitor.stop();
+        super.onStop();
+    }
     @Override protected void onResume() {
-        super.onResume(); resumed = true; startConnections();
+        super.onResume(); resumed = true; face.invalidate(); startConnections();
     }
     private void startConnections() {
         if(ownerDialog) return;
@@ -115,7 +126,9 @@ public final class FaceActivity extends ComponentActivity {
         startAttention(); refreshQuietControls();
     }
     @Override protected void onPause() {
-        resumed = false; stopConnections();
+        resumed = false;
+        if(face!=null) face.removeCallbacks(face.thermalRedraw);
+        stopConnections();
         super.onPause();
     }
     private void stopConnections() {
@@ -133,6 +146,7 @@ public final class FaceActivity extends ComponentActivity {
         if (resumed) { connectVoice(); startAttention(); }
     }
     @Override protected void onDestroy() {
+        if(thermalMonitor!=null) thermalMonitor.stop();
         if (attention != null) attention.close();
         if(performanceVideo!=null)performanceVideo.close();
         super.onDestroy();
@@ -145,7 +159,7 @@ public final class FaceActivity extends ComponentActivity {
                 visionState = status+" / "+analysisMs+" ms";
                 if (voice != null && count >= 0) voice.observeScene(count,analysisMs,faceFill);
                 if (cameraOverlay != null) cameraOverlay.invalidate();
-            }, image -> { if(resumed && vision!=null) vision.sample(image); });
+            }, image -> { if(resumed && vision!=null) vision.sample(image); }, thermalCadence);
         } catch (Exception ignored) { present = false; visionState = "Vision unavailable"; }
     }
     private void connectVoice() {
@@ -373,6 +387,12 @@ public final class FaceActivity extends ComponentActivity {
         private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
         private final Path shape = new Path();
         private float lookX=.5f, lookY=.5f;
+        private long lastGazeAt;
+        private final Runnable thermalRedraw=() -> { if(resumed) invalidate(); };
+        private Shader halo;
+        private int haloInner,haloOuter;
+        private final android.graphics.Typeface titleTypeface=android.graphics.Typeface.create(
+            "sans-serif-condensed",android.graphics.Typeface.BOLD);
         private final MouthRenderer mouthRenderer=new MouthRenderer();
         private final CaptionRenderer captionRenderer=new CaptionRenderer();
         String previewShape;
@@ -380,6 +400,10 @@ public final class FaceActivity extends ComponentActivity {
             super(FaceActivity.this); setBackgroundColor(Color.BLACK);
             setFocusable(true); setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_YES);
             setAccessibilityLiveRegion(View.ACCESSIBILITY_LIVE_REGION_POLITE);
+        }
+        @Override protected void onDetachedFromWindow() {
+            removeCallbacks(thermalRedraw);
+            super.onDetachedFromWindow();
         }
         @Override public void onInitializeAccessibilityNodeInfo(android.view.accessibility.AccessibilityNodeInfo info) {
             super.onInitializeAccessibilityNodeInfo(info);
@@ -409,16 +433,23 @@ public final class FaceActivity extends ComponentActivity {
         @Override protected void onDraw(Canvas canvas) {
             super.onDraw(canvas);
             float w=getWidth(), h=getHeight();
-            double t=android.os.SystemClock.uptimeMillis()/1000.0;
-            lookX+=(gazeX-lookX)*.18f; lookY+=(gazeY-lookY)*.18f;
+            long now=android.os.SystemClock.uptimeMillis();
+            double t=now/1000.0;
+            float blend=ThermalCadence.gazeBlend(lastGazeAt==0 ? 1000.0/60 : now-lastGazeAt);
+            lastGazeAt=now;
+            lookX+=(gazeX-lookX)*blend; lookY+=(gazeY-lookY)*blend;
             float dx=(lookX-.5f)*.10f, dy=(lookY-.5f)*.045f;
             float bob=(float)Math.sin(t*1.6)*.006f;
             int ice=palette[0], mint=palette[1], deep=palette[2];
             mouthRenderer.setColors(mint,ice);
             canvas.save(); canvas.scale(w,h); canvas.translate(0,bob);
             // A faint halo gives the disembodied face depth without a rectangular panel.
-            paint.setShader(new RadialGradient(.5f,.47f,.49f,
-                new int[]{palette[3],palette[4],Color.BLACK},null,Shader.TileMode.CLAMP));
+            if(halo==null || haloInner!=palette[3] || haloOuter!=palette[4]) {
+                haloInner=palette[3];haloOuter=palette[4];
+                halo=new RadialGradient(.5f,.47f,.49f,
+                    new int[]{haloInner,haloOuter,Color.BLACK},null,Shader.TileMode.CLAMP);
+            }
+            paint.setShader(halo);
             canvas.drawRect(0,0,1,1,paint); paint.setShader(null);
             float blink=t%5.3<.12 ? .10f : 1f;
             String reaction=voice!=null?voice.expression():"neutral";
@@ -452,7 +483,7 @@ public final class FaceActivity extends ComponentActivity {
             String caption=previewShape==null && voice!=null && !performanceVideo.isVisible()?voice.captionText():"";
             if(caption.isEmpty()) {
             fill(mint);paint.setTextAlign(Paint.Align.CENTER);
-            paint.setTypeface(android.graphics.Typeface.create("sans-serif-condensed",android.graphics.Typeface.BOLD));
+            paint.setTypeface(titleTypeface);
             paint.setTextSize(w*.045f);canvas.drawText(characterName.toUpperCase(java.util.Locale.ROOT),w*.5f,h*.80f,paint);
             paint.setTypeface(android.graphics.Typeface.DEFAULT);paint.setTextSize(w*.031f);paint.setAlpha(190);
             String visitorState=KioskStatus.visitorText(state,quietControl.localHold,outputPlaying());
@@ -467,7 +498,12 @@ public final class FaceActivity extends ComponentActivity {
                 android.view.WindowInsets insets=getRootWindowInsets();
                 captionRenderer.draw(canvas,caption,w,h,insets!=null?insets.getStableInsetBottom():0);
             }
-            postInvalidateOnAnimation();
+            removeCallbacks(thermalRedraw);
+            if(resumed) {
+                int delay=thermalCadence.redrawDelayMs();
+                if(delay==0) postInvalidateOnAnimation();
+                else postOnAnimationDelayed(thermalRedraw,delay);
+            }
         }
     }
 }

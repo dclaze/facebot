@@ -134,3 +134,29 @@ change detected 39/39 history variants and 144/144 additional controlled speech
 replays across eight sample alignments; 72 recorded/synthetic quiet and noise
 replays remained quiet. These are local replay results, not a substitute for
 live microphone acceptance or a guarantee for other voices and environments.
+
+## Native thermal workload adaptation
+
+On Android 29 and newer, the activity observes `PowerManager` thermal status while
+started and unregisters on stop. Severe status 3 limits MLKit attention analysis
+to ten frames per second; critical status 4 or higher limits it to five. Valid
+incoming frames still reach the independent vision snapshot sampler before the
+analysis decision, and skipped proxies close immediately. No camera frames are
+held or queued by the policy. Status 0–2 preserves normal analysis cadence.
+
+Severe/critical status requests at least 33/67ms between scheduled face redraws,
+respectively, with display-vsync alignment potentially lowering the actual rate.
+Gaze interpolation uses elapsed time so slower drawing does not multiply gaze
+lag. Static halo shaders and the title typeface are cached. Audio transport,
+playback clocks and voice behavior are unchanged. Thermal redraw callbacks are
+removed on pause/detach and resume seeds a fresh redraw.
+
+API 26–28 retain baseline behavior because the supported thermal API begins at 29.
+If monitoring becomes unavailable, the last known policy is retained; these
+controls do not change system thermal overrides or device settings. They reduce
+app-requested work, but camera preview/ISP work remains and temperature reduction
+has not been established by unit tests. Compare actual rendering, attention,
+voice/vision freshness and resource observations before claiming improvement.
+Run `sh scripts/test-thermal-workload.sh` for synthetic transition, timing and
+frame-ownership checks; physical lifecycle/API availability still needs device
+verification.
