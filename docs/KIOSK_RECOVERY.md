@@ -38,6 +38,8 @@ python3 scripts/kiosk-service.py restart
 python3 scripts/kiosk-service.py uninstall
 ```
 
+`restart` waits for launchd to finish removing the old job before registering its replacement. Each stop/start phase has a 30-second deadline; transient bootstrap failures retry after 0.25 seconds, doubling to a maximum 2-second delay. Repeated `start` or `stop` commands are idempotent. A failed deadline returns an error instead of starting a competing job or retrying forever.
+
 `status` shows the last phase, its age, current health and whether launchd has the job loaded. A stale `ready` observation is historical; require `healthy_now: true`, a fresh observation and `launchd_loaded: true`. `child_pid` identifies only the currently supervised child. `stop` unloads the job so launchd does not immediately replace it; it remains installed for the next login or explicit `start`. `uninstall` unloads and removes the plist, while retaining private configuration and bounded logs for rollback. To change release/configuration, uninstall and install again with the desired arguments.
 
 A child has 180 seconds to become ready (including model/audio prewarming). Then the watchdog checks every 5 seconds, with a 2-second HTTP timeout and three consecutive failures before replacement. Child shutdown allows 10 seconds, then kills/reaps a stuck child. Retry delay doubles from 2 to a maximum of 60 seconds; two continuous healthy minutes reset it. Thus an indefinitely broken installation retries at most once per minute after the initial attempts, rather than thrashing. Launchd separately throttles supervisor respawns to 30 seconds. `port_conflict` waits 60 seconds without touching the other process.

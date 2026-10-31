@@ -190,17 +190,68 @@ def plist_path():
     return Path.home() / 'Library/LaunchAgents' / (LABEL + '.plist')
 
 
-def launchctl(*args, check=True):
+def launchctl(*args, check=True, timeout=10):
     return subprocess.run(['/bin/launchctl', *args], check=check,
-                          stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                          stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=timeout)
 
 
 def service_target():
     return f'gui/{os.getuid()}/{LABEL}'
 
 
-def is_loaded():
-    return launchctl('print', service_target(), check=False).returncode == 0
+def is_loaded(timeout=10):
+    return launchctl('print', service_target(), check=False, timeout=timeout).returncode == 0
+
+
+def remaining(deadline):
+    value = deadline - time.monotonic()
+    if value <= 0:
+        raise TimeoutError('LaunchAgent transition deadline expired')
+    return value
+
+
+def transition_pause(deadline, delay):
+    time.sleep(min(delay, remaining(deadline)))
+
+
+def stop_service(timeout=30):
+    """bootout acknowledgement can precede completion of job removal."""
+    deadline = time.monotonic() + timeout
+    if not is_loaded(timeout=min(5, remaining(deadline))):
+        return
+    try:
+        launchctl('bootout', service_target(), timeout=remaining(deadline))
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired):
+        # A concurrent stop can remove the job after print. Determine the actual
+        # resulting state; never assume an error means the old job still exists.
+        pass
+    while is_loaded(timeout=min(5, remaining(deadline))):
+        transition_pause(deadline, .25)
+
+
+def start_service(timeout=30):
+    """Allow launchd's transient post-bootout registration race to settle."""
+    deadline = time.monotonic() + timeout
+    delay = .25
+    while True:
+        if is_loaded(timeout=min(5, remaining(deadline))):
+            return
+        if not plist_path().is_file():
+            raise FileNotFoundError('Install the service before starting it')
+        try:
+            launchctl('bootstrap', f'gui/{os.getuid()}', str(plist_path()),
+                      timeout=remaining(deadline))
+            return
+        except (subprocess.CalledProcessError, subprocess.TimeoutExpired):
+            # No exception/command/environment contents enter logs. A print on
+            # the next iteration also makes concurrent successful starts safe.
+            transition_pause(deadline, delay)
+            delay = min(2, delay * 2)
+
+
+def restart_service():
+    stop_service()
+    start_service()
 
 
 def build_config(args):
@@ -251,7 +302,7 @@ def install(args, state):
     with plist_path().open('wb') as stream:
         os.chmod(plist_path(), 0o600)
         plistlib.dump(plist, stream)
-    launchctl('bootstrap', f'gui/{os.getuid()}', str(plist_path()))
+    start_service()
     print('Installed and started. Use status to check readiness; login is required after reboot.')
 
 
@@ -295,21 +346,17 @@ def main():
             parser.error('Speech rate must be 0.8–1.3 and port 1–65535')
         install(args, state)
     elif args.action in ('stop', 'uninstall'):
-        if is_loaded():
-            launchctl('bootout', service_target())
+        stop_service()
         if args.action == 'uninstall':
             plist_path().unlink(missing_ok=True)
             # Retain private configuration and bounded logs for explicit rollback.
         print('Stopped.' if args.action == 'stop' else 'Uninstalled; private configuration and logs retained.')
     elif args.action == 'start':
-        if not is_loaded():
-            launchctl('bootstrap', f'gui/{os.getuid()}', str(plist_path()))
+        start_service()
         print('Started; use status to check readiness.')
     elif args.action == 'restart':
         # SIGTERM lets the supervisor reap its child before launchd starts again.
-        if is_loaded():
-            launchctl('bootout', service_target())
-        launchctl('bootstrap', f'gui/{os.getuid()}', str(plist_path()))
+        restart_service()
         print('Restart requested; use status to check readiness.')
     return 0
 

@@ -218,4 +218,91 @@ class KioskRecoveryTests(unittest.TestCase):
         launch.assert_called_once()
 
 
+class LaunchctlTransitionTests(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.plist = Path(self.temp.name) / 'fixture.plist'
+        self.plist.write_text('isolated fixture')
+        self.now = 0.
+        self.sleeps = []
+        def sleep(duration):
+            self.sleeps.append(duration)
+            self.now += duration
+        for patcher in (patch.object(kiosk, 'plist_path', return_value=self.plist),
+                        patch.object(kiosk.time, 'monotonic', side_effect=lambda: self.now),
+                        patch.object(kiosk.time, 'sleep', side_effect=sleep)):
+            patcher.start()
+            self.addCleanup(patcher.stop)
+
+    def test_restart_waits_for_unload_then_recovers_transient_bootstrap_failure(self):
+        events = []
+        loaded = iter([True, True, False, False, False])
+        attempts = 0
+        def observe(**kwargs):
+            value = next(loaded)
+            events.append(('loaded', value))
+            return value
+        def command(*args, **kwargs):
+            nonlocal attempts
+            events.append((args[0], None))
+            if args[0] == 'bootstrap':
+                attempts += 1
+                if attempts == 1:
+                    raise subprocess.CalledProcessError(5, ['launchctl', 'bootstrap'])
+        with patch.object(kiosk, 'is_loaded', side_effect=observe), \
+             patch.object(kiosk, 'launchctl', side_effect=command):
+            kiosk.restart_service()
+        self.assertEqual(attempts, 2)
+        self.assertLess(events.index(('loaded', False)), events.index(('bootstrap', None)))
+        self.assertEqual(self.sleeps, [.25, .25])
+
+    def test_permanent_bootstrap_failure_stops_at_deadline_without_busy_loop(self):
+        error = subprocess.CalledProcessError(5, ['launchctl', 'bootstrap'])
+        with patch.object(kiosk, 'is_loaded', return_value=False), \
+             patch.object(kiosk, 'launchctl', side_effect=error) as command:
+            with self.assertRaises(TimeoutError):
+                kiosk.start_service(timeout=1)
+        self.assertEqual(self.now, 1)
+        self.assertEqual(self.sleeps, [.25, .5, .25])
+        self.assertEqual(command.call_count, 3)
+        for call in command.call_args_list:
+            self.assertLessEqual(call.kwargs['timeout'], 1)
+
+    def test_start_and_stop_are_idempotent(self):
+        with patch.object(kiosk, 'is_loaded', return_value=True), \
+             patch.object(kiosk, 'launchctl') as command:
+            kiosk.start_service()
+            kiosk.start_service()
+            command.assert_not_called()
+        with patch.object(kiosk, 'is_loaded', return_value=False), \
+             patch.object(kiosk, 'launchctl') as command:
+            kiosk.stop_service()
+            kiosk.stop_service()
+            command.assert_not_called()
+        self.assertEqual(self.sleeps, [])
+
+    def test_concurrent_stop_error_accepts_observed_unloaded_state(self):
+        with patch.object(kiosk, 'is_loaded', side_effect=[True, False]), \
+             patch.object(kiosk, 'launchctl', side_effect=subprocess.CalledProcessError(3, ['launchctl', 'bootout'])):
+            kiosk.stop_service()
+        self.assertEqual(self.sleeps, [])
+
+    def test_unload_deadline_does_not_bootstrap_a_competing_job(self):
+        with patch.object(kiosk, 'is_loaded', return_value=True), \
+             patch.object(kiosk, 'launchctl') as command:
+            with self.assertRaises(TimeoutError):
+                kiosk.stop_service(timeout=.5)
+        self.assertEqual(self.now, .5)
+        self.assertEqual(command.call_args.args[0], 'bootout')
+        self.assertEqual(command.call_count, 1)
+
+    def test_concurrent_start_failure_returns_if_job_is_now_loaded(self):
+        with patch.object(kiosk, 'is_loaded', side_effect=[False, True]), \
+             patch.object(kiosk, 'launchctl', side_effect=subprocess.CalledProcessError(5, ['launchctl', 'bootstrap'])) as command:
+            kiosk.start_service()
+        self.assertEqual(command.call_count, 1)
+        self.assertEqual(self.sleeps, [.25])
+
+
 if __name__ == '__main__': unittest.main()
