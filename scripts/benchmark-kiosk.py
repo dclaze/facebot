@@ -113,9 +113,9 @@ async def behavior():
     return results
 
 
-def speech(prewarm, limit):
+def speech(limit, voice, speech_rate):
     from server.tts import SpeechEngine
-    engine = SpeechEngine()
+    engine = SpeechEngine(voice=voice, speed=speech_rate)
     lines = prepared_texts()[:limit] if limit else prepared_texts()
     generated, cached, rows = [], [], []
     try:
@@ -138,7 +138,7 @@ def speech(prewarm, limit):
                          'audio_seconds': round(len(pcm)/48000, 3)})
     finally:
         engine.executor.shutdown()
-    return {'cache_directory': str(engine.prepared_cache.root), 'lines': len(lines),
+    return {'cache_directory': str(engine.prepared_cache.root), 'lines': len(lines), 'voice': voice, 'speech_rate': speech_rate,
             'uncached_synthesis': summarize(generated) if generated else None,
             'cached_read': summarize(cached), 'cases': rows}
 
@@ -148,11 +148,13 @@ def main():
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--prewarm', action='store_true')
     parser.add_argument('--limit', type=int, default=0)
+    parser.add_argument('--voice', default='af_heart')
+    parser.add_argument('--speech-rate', type=float, default=1.12)
     args = parser.parse_args()
     result = {'evidence': 'offline actual processor replay; no microphone, network, device or acoustic measurement',
               'routes': asyncio.run(routes()), 'behavior': asyncio.run(behavior())}
     if args.prewarm:
-        result['speech'] = speech(True, args.limit)
+        result['speech'] = speech(args.limit, args.voice, args.speech_rate)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(result, indent=2) + '\n')
     print(json.dumps({key: value for key, value in result.items() if key != 'speech'}, indent=2))

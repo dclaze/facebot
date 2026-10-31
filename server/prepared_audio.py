@@ -45,7 +45,8 @@ class PreparedAudioCache:
                 total += len(audio)
                 if (len(audio) % 2 or not audio or total > 24_000 * 2 * 20
                         or hashlib.sha256(audio).hexdigest() != row['sha256']
-                        or not isinstance(row['mouth_cues'], list) or not isinstance(row['captions'], list)):
+                        or not isinstance(row['mouth_cues'], list) or len(row['mouth_cues']) > 1024
+                        or not isinstance(row['captions'], list)):
                     raise ValueError('Invalid prepared audio')
                 samples = len(audio) // 2
                 previous = 0

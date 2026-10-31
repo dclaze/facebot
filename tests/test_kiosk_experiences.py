@@ -160,6 +160,7 @@ class KioskTests(unittest.IsolatedAsyncioTestCase):
             segment = SpeechSegment(b'\0\0' * 2400, [[0, 2400, 'open']], [[0, 2400, text]])
             for field, bad in [('mouth_cues', [[0, 2400, 'A']]),
                                ('mouth_cues', [[0, 3000, 'open']]),
+                               ('mouth_cues', [[i, i+1, 'open'] for i in range(1025)]),
                                ('captions', [[0, 2400, 'bad\ncaption']]),
                                ('captions', [[0, 3000, text]])]:
                 cache.put(text, 'af_heart', 1.05, [segment])
