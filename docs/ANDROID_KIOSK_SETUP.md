@@ -18,7 +18,7 @@ The face consumes ordinary touches and Back, stays awake while foregrounded, and
 
 For automatic return after reboot or system relaunch, owner setup can open **Choose default Home app**. Choosing Facebot there is an explicit reversible owner action; the app does not change the default itself. Change the default back in Android Settings → Apps → Default apps → Home app. Android/OEM lock-screen and boot restrictions still apply. In the coordinated Lenovo test, an intentional app crash did not return Facebot within 22 seconds even with Facebot selected as Home; the prior launcher remained visible and the owner relaunched the app. Default Home is therefore not an observed crash-recovery guarantee on this tablet. A regular unpinned foreground app cannot guarantee recovery after force-stop, an OS error dialog, power loss or a locked reboot. No device-owner provisioning, factory reset, alarm-based crash loop or background microphone service is installed.
 
-Voice reconnects with 1, 2, 4, 8 and then at most 15 seconds of retry delay. Failed transport immediately clears queued audio, captions, mouth timing, special face cues and video, so stale speech is not replayed after reconnection. The face displays a brief reconnect status. The host must also be running; host auto-start is a separate setup step.
+Voice reconnects with 1, 2, 4 and then at most 5 seconds of retry delay. Failed transport immediately clears queued audio, captions, mouth timing, special face cues and video, so stale speech is not replayed after reconnection. The face displays a brief reconnect status. The host must also be running; host auto-start is a separate setup step.
 
 ## Private developer build
 

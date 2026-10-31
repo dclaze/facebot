@@ -23,6 +23,6 @@ final class ConnectionPolicy {
         } catch(Exception ignored) { return false; }
     }
     static long retryDelay(int failures) {
-        return Math.min(15000L, 1000L << Math.min(4,Math.max(0,failures-1)));
+        return Math.min(5000L, 1000L << Math.min(4,Math.max(0,failures-1)));
     }
 }
