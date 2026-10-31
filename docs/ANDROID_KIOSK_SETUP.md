@@ -53,6 +53,40 @@ python3 scripts/benchmark-device.py --base-url http://127.0.0.1:8765 \
 
 The last JSONL record and console output contain the summary. Exit 0 means all observed health samples and requested probes passed; exit 1 means an observed gap, failed rehearsal or interrupted run. Timing is host dispatch to actual native playback-head acknowledgement, including return network/polling delay, and excludes recognition and acoustic output. Independently remove the USB transport path and establish tablet Wi-Fi before describing any result as Wi-Fi. Health is point sampling: the report includes actual elapsed/soak durations and maximum sample gap, does not prove continuous uptime, and never turns a short run into a 12-hour acceptance claim. `--soak-seconds` is capped at 43200; request, idle and receipt waits are bounded.
 
+## Optional read-only resource observation
+
+The network benchmark does not collect power, thermal or memory evidence. Run
+this separate observer only when the owner has already authorized one tablet in
+ADB; it does not connect, pair, install, wake, change settings or restart the app:
+
+```sh
+python3 scripts/observe-android-resources.py --observe-adb \
+  --output .local/resources-overnight.jsonl --duration-seconds 43200
+```
+
+Use `--adb /absolute/path/to/adb` if needed. The explicit `--observe-adb` flag is
+required. More than one listed device fails without printing identifiers; a
+replacement device ends observation rather than silently switching targets.
+The selected identity stays in memory and the child environment, never in command
+arguments or receipts. A disconnected or unauthorized device produces unavailable
+samples without reconnecting it.
+
+Samples run on a fixed 60-second schedule for at most 12 hours, using five-second
+command timeouts also bounded by the remaining duration. Commands read only the
+`org.facebot` PID, package memory, battery and thermal service. Receipts contain
+process-presence/PID-change counts (not PIDs), PSS in KiB, plugged state, battery
+level/temperature and the platform thermal status code. Unsupported or malformed
+fields remain null with fixed command-status codes; raw dumps and visitor data
+are never saved. Each run requires a new JSONL file created with mode 0600.
+
+The final summary records sample count, observed PID changes/absence/unknowns,
+maximum sample gap and resource extrema. Exit 0 means the requested observation
+period ended, not that the device passed a health or safety criterion; exit 1
+means interrupted or aborted observation. These point samples cannot prove
+continuous uptime, absence of memory leaks, thermal safety or uninterrupted voice.
+They complement the host network/freshness receipts and physical checks; USB
+observation itself does not establish that app traffic uses Wi-Fi.
+
 ## Optional USB process watchdog
 
 For a powered tablet that stays physically attached to the host, the owner may explicitly enable the host service's `--tablet-watchdog` option. Voice can continue over Wi-Fi: the watchdog never creates USB reverse ports. This compensates for the observed Lenovo Home/crash limitation only when the app process is absent; it does not guarantee recovery from a hung process, an error dialog, a locked screen or disconnected USB.
