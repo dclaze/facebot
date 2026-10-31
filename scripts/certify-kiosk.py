@@ -18,7 +18,7 @@ import zipfile
 ROOT = Path(__file__).resolve().parents[1]
 CORE_TESTS = ('test_kiosk_experiences.py', 'test_skill_store.py', 'test_kiosk_transport.py', 'test_kiosk_service.py', 'test_kiosk_tools.py')
 EXTRA_TESTS = ('test_reply_quality.py', 'test_tts_stream.py', 'test_protocol.py')
-NATIVE = ('ConnectionPolicy', 'PerformanceFaceCue', 'PlaybackProbe', 'PlaybackQueue', 'CaptionTimeline', 'PerformanceVideoCue')
+NATIVE = ('ConnectionPolicy', 'PerformanceFaceCue', 'PlaybackProbe', 'KioskStatus', 'PlaybackQueue', 'CaptionTimeline', 'PerformanceVideoCue')
 PHYSICAL = ('device', 'wifi', 'recovery', 'visual', 'endurance', 'generated_latency')
 REQUIRED_FLAGS = {
     'device': ('voice_and_vision_connected', 'audible_response_verified', 'owner_mute_verified', 'owner_exit_verified'),
