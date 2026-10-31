@@ -100,7 +100,7 @@ class Receipts:
 
 def run(client, sink, *, rehearse=False, scenarios=('welcome', 'candy', 'joke'), repeats=1,
         soak_seconds=0, interval=2, idle_timeout=30, receipt_timeout=18,
-        clock=time.monotonic, sleep=time.sleep):
+        vision=False, clock=time.monotonic, sleep=time.sleep):
     if not 1 <= repeats <= 5 or not scenarios or len(scenarios) * repeats > 30 or any(s not in SCENARIOS for s in scenarios):
         raise ValueError('Use 1–30 allowlisted rehearsals, at most 5 repetitions')
     if not 0 <= soak_seconds <= 43200 or not .25 <= interval <= 60 or not 1 <= idle_timeout <= 120 or not 1 <= receipt_timeout <= 30:
@@ -132,6 +132,15 @@ def run(client, sink, *, rehearse=False, scenarios=('welcome', 'candy', 'joke'),
                             fields[key] = voice.get(key) if type(voice.get(key)) is bool else None
             except ProbeError as error:
                 fields['health_error' if path == '/health' else 'diagnostics_error'] = str(error)
+        if vision:
+            try:
+                data = client.request('/vision/diagnostics')
+                fields['vision_fresh'] = data.get('fresh') if type(data.get('fresh')) is bool else None
+                for key in ('frames', 'errors', 'age_ms', 'inference_ms'):
+                    value = data.get(key)
+                    fields['vision_' + key] = value if type(value) in (int, float) and math.isfinite(value) and value >= 0 else None
+            except ProbeError as error:
+                fields['vision_error'] = str(error)
         row = emit('health', **fields)
         checks.append(row)
         return row, diagnostics
@@ -226,6 +235,16 @@ def run(client, sink, *, rehearse=False, scenarios=('welcome', 'candy', 'joke'),
                    latency={'n':len(values), 'p50_ms':statistics.median(values),
                             'p95_ms':values[math.ceil(len(values)*.95)-1], 'max_ms':max(values)} if values else None)
     summary['ok'] = bool(checks) and not interrupted and all(r.get('health_ready') is True and r.get('voice_connected') is True for r in checks) and all(r['status']=='played' for r in results)
+    summary['vision_enabled'] = vision
+    if vision:
+        counters = [r['vision_errors'] for r in checks if r.get('vision_errors') is not None]
+        summary['vision'] = dict(
+            fresh_samples=sum(r.get('vision_fresh') is True for r in checks),
+            stale_samples=sum(r.get('vision_fresh') is False for r in checks),
+            unknown_samples=sum(type(r.get('vision_fresh')) is not bool for r in checks),
+            maximum_reported_error_counter=max(counters, default=None),
+            coverage='Freshness and numeric counters only; no scene content or recognition-quality inference. Error counters may include failures before this observation.')
+        summary['ok'] = summary['ok'] and all(r.get('vision_fresh') is True and r.get('vision_errors') == 0 for r in checks)
     sink.write(summary)
     return summary
 
@@ -236,6 +255,7 @@ def main():
     parser.add_argument('--token-file', type=Path, required=True)
     parser.add_argument('--output', type=Path, required=True, help='New private JSONL receipt file; never overwritten')
     parser.add_argument('--rehearse', action='store_true', help='Explicitly play allowlisted synthetic scenarios on the connected tablet')
+    parser.add_argument('--vision', action='store_true', help='Also sample content-free camera freshness and error counters; no recognition-quality claim')
     parser.add_argument('--scenarios', default='welcome,candy,joke', help='Comma-separated allowlisted scenario names, only with --rehearse')
     parser.add_argument('--repeats', type=int, default=1)
     parser.add_argument('--soak-seconds', type=float, default=0, help='Read-only sampling duration, 0–43200; report actual observed duration')
@@ -252,7 +272,7 @@ def main():
         try:
             summary = run(client, sink, rehearse=args.rehearse, scenarios=tuple(args.scenarios.split(',')),
                           repeats=args.repeats, soak_seconds=args.soak_seconds, interval=args.interval,
-                          idle_timeout=args.idle_timeout, receipt_timeout=args.receipt_timeout)
+                          idle_timeout=args.idle_timeout, receipt_timeout=args.receipt_timeout, vision=args.vision)
         finally:
             sink.close()
         print(json.dumps(summary, indent=2))

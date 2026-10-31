@@ -29,6 +29,8 @@ class FakeClock:
 class DeviceBenchmarkTests(unittest.TestCase):
     def setUp(self):
         self.paths=[];self.receipt=False;self.connected=True;self.receipt_id=ID
+        self.vision={'fresh':True,'frames':4,'errors':0,'age_ms':100,'inference_ms':500,
+                     'labels':['PRIVATE VISITOR SENTINEL'],'token':TOKEN}
         owner=self
         class Handler(BaseHTTPRequestHandler):
             def log_message(self,*args): pass
@@ -41,6 +43,7 @@ class DeviceBenchmarkTests(unittest.TestCase):
                 if self.headers.get('Authorization')!='Bearer '+TOKEN:
                     return self.respond({},403)
                 if self.path=='/health': return self.respond({'status':'ready','private':'PRIVATE VISITOR SENTINEL'})
+                if self.path=='/vision/diagnostics': return self.respond(owner.vision)
                 if self.path=='/diagnostics':
                     voice={'silenced':False,'user_speaking':False,'bot_speaking':False,'response_pending':False} if owner.connected else None
                     samples=[{'id':owner.receipt_id,'status':'played','dispatch_to_native_ack_ms':189.,'transcript':'PRIVATE VISITOR SENTINEL'}] if owner.receipt else []
@@ -70,6 +73,31 @@ class DeviceBenchmarkTests(unittest.TestCase):
         self.assertEqual([p for p in self.paths if p[0]=='POST'],[('POST','/owner/rehearse/joke')])
         self.assertEqual(summary['latency']['p50_ms'],189.)
         self.assertEqual(summary['played_count'],1);self.assert_private()
+    def test_optional_vision_reads_only_numeric_freshness_without_scene_content(self):
+        summary=self.run_probe(vision=True)
+        self.assertIn(('GET','/vision/diagnostics'),self.paths)
+        self.assertTrue(summary['ok']);self.assertEqual(summary['vision']['fresh_samples'],1)
+        self.assertFalse(any(method=='POST' for method,_ in self.paths));self.assert_private()
+    def test_stale_or_malformed_or_error_vision_cannot_pass(self):
+        for payload in ({'fresh':False,'errors':0},{'fresh':'true','errors':0},
+                        {'fresh':True,'errors':1},{'fresh':True},
+                        {'fresh':True,'errors':float('nan')},
+                        {'fresh':True,'errors':False},
+                        {'fresh':True,'errors':-1}):
+            with self.subTest(payload=payload):
+                self.vision=payload
+                summary=self.run_probe(vision=True)
+                self.assertFalse(summary['ok'])
+                json.dumps(self.sink.rows,allow_nan=False)
+        self.assert_private()
+    def test_vision_soak_reports_stale_and_unknown_without_hiding_failures(self):
+        def sleep(value):
+            self.clock.sleep(value)
+            self.vision={'fresh':False,'errors':0} if self.clock.now<.75 else {}
+        summary=benchmark.run(self.client,self.sink,vision=True,soak_seconds=1,interval=.25,clock=self.clock,sleep=sleep)
+        self.assertGreater(summary['vision']['stale_samples'],0)
+        self.assertGreater(summary['vision']['unknown_samples'],0)
+        self.assertFalse(summary['ok']);self.assert_private()
     def test_idle_timeout_does_not_trigger_audio(self):
         self.connected=False
         summary=self.run_probe(rehearse=True,scenarios=('joke',),idle_timeout=1,interval=.25)

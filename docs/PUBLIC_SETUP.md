@@ -83,6 +83,17 @@ Add `--allow-client OWNER_DEVICE_PRIVATE_IP` only for an explicitly authorized o
 
 ## Generate an honest readiness report
 
+For a read-only endurance observation of both voice connectivity and camera freshness:
+
+```sh
+.venv/bin/python scripts/benchmark-device.py \
+  --base-url http://192.168.1.50:8765 --token-file .local/pairing-token \
+  --output .local/kiosk-readiness/voice-vision-soak.jsonl \
+  --vision --soak-seconds 43200 --interval 10
+```
+
+Use a new output filename for each run. This does not play speech or restart anything. `--vision` adds only numeric counters and freshness; it never stores camera labels, images, or visitor text. Stale/missing vision or a nonzero reported error counter prevents the combined benchmark from passing. Error counters can include failures before the observation. Ten-second samples cannot prove uninterrupted uptime between samples, scene recognition quality, or audible response timing. Without `--vision`, the benchmark covers voice health only. A full duration must actually elapse; requesting twelve hours is not evidence that twelve hours passed.
+
 The component benchmark `scripts/benchmark-kiosk.py` exercises prepared processors and can prewarm authored audio. Its cached/replay timings are not generated audible latency.
 
 The aggregate runner is `scripts/certify-kiosk.py`:
