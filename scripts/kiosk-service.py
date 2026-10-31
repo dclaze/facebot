@@ -47,6 +47,64 @@ def port_occupied(port, host='127.0.0.1'):
         return sock.connect_ex((host, port)) == 0
 
 
+def tts_stall_timeout(value=90):
+    import math
+    if type(value) not in (int, float) or not math.isfinite(value) or not 30 <= value <= 600:
+        raise ValueError('TTS stall deadline must be 30–600 seconds')
+    return float(value)
+
+
+def worker_recovery(config):
+    """Private, bounded, content-free evidence; unavailable is not a stall."""
+    try:
+        token = Path(config['token_file']).read_text().strip()
+        # Never forward bearer credentials through HTTP redirects or proxies.
+        class NoRedirect(urllib.request.HTTPRedirectHandler):
+            def redirect_request(self, *args, **kwargs):
+                return None
+        opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), NoRedirect())
+        request = urllib.request.Request(
+            f"http://{config.get('host', '127.0.0.1')}:{config['port']}/recovery",
+            headers={'Authorization': 'Bearer ' + token})
+        with opener.open(request, timeout=config['health_timeout']) as response:
+            return json.loads(response.read(4097))
+    except (OSError, ValueError):
+        return None
+
+
+class StalledWorker:
+    """Require unchanged execution AND continuous demand for a full deadline.
+
+    This is a bounded unresponsiveness policy, not proof of a native deadlock.
+    A queued waiter alone, old idle timing, or a cancelled job alone is not one.
+    """
+    def __init__(self, timeout):
+        self.timeout = timeout
+        self.reset()
+
+    def reset(self):
+        self.key = None
+        self.since = None
+
+    def observe(self, report, now):
+        import math
+        worker = report.get('tts_worker') if isinstance(report, dict) else None
+        if not (isinstance(worker, dict) and type(report.get('version')) is int and report['version'] == 1
+                and report.get('eligible') is True
+                and type(worker.get('waiting')) is int and 0 < worker['waiting'] <= 10000
+                and type(worker.get('demand')) is int and worker['demand'] > 0
+                and type(worker.get('running_job')) is int and worker['running_job'] > 0
+                and type(worker.get('progress')) is int and worker['progress'] >= 0
+                and type(worker.get('progress_age_s')) in (int, float)
+                and math.isfinite(worker['progress_age_s']) and worker['progress_age_s'] >= 0):
+            self.reset()
+            return False
+        key = worker['running_job'], worker['progress'], worker['demand']
+        if key != self.key:
+            self.key, self.since = key, now
+        return now - self.since >= self.timeout and worker['progress_age_s'] >= self.timeout
+
+
 def healthy(config):
     # No token, remote host, response body or exception is logged.
     try:
@@ -115,6 +173,7 @@ class SleepGuard:
 class Supervisor:
     def __init__(self, config, state, lock_path=LOCK):
         self.config, self.state, self.lock_path = config, Path(state), Path(lock_path)
+        self.worker_deadline = tts_stall_timeout(config.get('tts_stall_timeout', 90))
         self.stop_event = threading.Event()
         self.child = None
         self.restarts = 0
@@ -267,6 +326,7 @@ class Supervisor:
                         ready_since = None
                         stable_since = None
                         misses = 0
+                        worker_watch = StalledWorker(self.worker_deadline)
                         reason = 'stopped'
                         while not self.stop_event.is_set():
                             if self.child.poll() is not None:
@@ -274,6 +334,12 @@ class Supervisor:
                                 break
                             now = time.monotonic()
                             if healthy(self.config):
+                                if ready_since is not None and self.config.get('role', 'voice') == 'voice':
+                                    if worker_watch.observe(worker_recovery(self.config), time.monotonic()):
+                                        reason = 'tts_unresponsive'
+                                        break
+                                    if worker_watch.key is not None:
+                                        stable_since = None
                                 if stable_since is None:
                                     stable_since = now
                                 if ready_since is None:
@@ -282,14 +348,16 @@ class Supervisor:
                                 else:
                                     self.report('ready')
                                 misses = 0
-                                if now - stable_since >= self.config['stable_reset']:
+                                if worker_watch.key is None and now - stable_since >= self.config['stable_reset']:
                                     failures = 0
                             elif ready_since is None:
+                                worker_watch.reset()
                                 stable_since = None
                                 if now - born >= self.config['startup_timeout']:
                                     reason = 'startup_timeout'
                                     break
                             else:
+                                worker_watch.reset()
                                 stable_since = None
                                 misses += 1
                                 self.report('health_miss', consecutive=misses)
@@ -437,6 +505,7 @@ def build_config(args):
                 model=args.model, tts=args.tts, speech_rate=args.speech_rate,
                 interval=5, health_timeout=2, health_failures=3, startup_timeout=180,
                 stop_timeout=10, backoff_initial=2, backoff_max=60, stable_reset=120)
+    config['tts_stall_timeout'] = tts_stall_timeout(getattr(args, 'tts_stall_timeout', 90))
     config['prevent_sleep'] = not getattr(args, 'no_sleep_protection', False)
     if not getattr(args, 'no_admin', False):
         if not (root / 'server/admin.py').is_file():
@@ -529,6 +598,8 @@ def main():
     setup.add_argument('--model', required=True, choices=['qwen2.5:1.5b', 'qwen3.5:9b', 'qwen3:1.7b'])
     setup.add_argument('--tts', required=True, choices=['kokoro', 'qwen3'])
     setup.add_argument('--speech-rate', type=float, default=1.12)
+    setup.add_argument('--tts-stall-timeout', type=float, default=90,
+                       help='Replace an unresponsive demanded TTS worker after 30–600 seconds (default 90)')
     setup.add_argument('--port', type=int, default=8765)
     setup.add_argument('--host', default='127.0.0.1', help='Loopback or explicit RFC1918 IPv4 address')
     setup.add_argument('--trusted-lan', action='store_true', help='Opt into unencrypted service on a trusted private LAN')

@@ -37,6 +37,11 @@ class Handler(BaseHTTPRequestHandler):
  def do_GET(self):
   if mode.read_text() == 'hang': time.sleep(30)
   value = {'status':'ready','profile':os.environ['FACEBOT_PROFILE'], 'etag':'fixture', 'tts':{'backend':os.environ['FACEBOT_TTS']}}
+  if self.path == '/recovery':
+   if self.headers.get('Authorization') != 'Bearer ' + os.environ.get('FACEBOT_TOKEN', ''):
+    self.send_response(403); self.end_headers(); return
+   report = root / 'recovery.json'
+   value = json.loads(report.read_text()) if report.exists() else {'version':1,'eligible':False}
   if self.path == '/api/tags': value = {'models':[]}
   if mode.read_text() == 'wrong_profile': value['profile'] = 'wrong'
   raw = json.dumps(value).encode()
@@ -96,6 +101,53 @@ class KioskRecoveryTests(unittest.TestCase):
 
     def ready(self):
         return wait_for(lambda: self.status().get('phase') == 'ready')
+
+    @patch.object(kiosk, 'worker_recovery', wraps=kiosk.worker_recovery)
+    def test_unresponsive_demanded_worker_restarts_only_voice_with_bounded_backoff(self, probe):
+        self.configure_admin_fixture()
+        # Production config rejects tiny deadlines; only this isolated fixture
+        # scales the already-validated supervisor timer to keep tests bounded.
+        self.supervisor.worker_deadline = .15
+        report = {'version': 1, 'eligible': True, 'tts_worker': dict(
+            running_job=1, progress=0, progress_age_s=1000, waiting=1, demand=2)}
+        (self.root / 'recovery.json').write_text(json.dumps(report))
+        self.start()
+        self.ready()
+        self.admin_ready()
+        voice_pid, admin_pid = self.supervisor.child.pid, self.supervisor.admin.child.pid
+        self.assertTrue(kiosk.healthy(self.config))
+        self.assertEqual(kiosk.worker_recovery(self.config), report)
+        wait_for(lambda: self.supervisor.restarts >= 3)
+        report['eligible'] = False
+        (self.root / 'recovery.json').write_text(json.dumps(report))
+        wait_for(lambda: self.supervisor.child and self.supervisor.child.pid != voice_pid)
+        self.ready()
+        self.assertEqual(self.supervisor.admin.child.pid, admin_pid)
+        with self.assertRaises(ProcessLookupError):
+            os.kill(voice_pid, 0)
+        logs = [json.loads(line[line.index('{'):]) for line in
+                (self.state / 'recovery.log').read_text().splitlines() if '{' in line]
+        retries = [r for r in logs if r.get('reason') == 'tts_unresponsive']
+        self.assertEqual([r['retry_seconds'] for r in retries[:3]], [.1, .2, .4])
+        self.assertNotIn(self.token, (self.state / 'recovery.log').read_text())
+        self.assertTrue(all(call.args[0].get('role', 'voice') == 'voice' for call in probe.call_args_list))
+
+    def test_no_worker_probe_before_ready(self):
+        (self.root / 'mode').write_text('wrong_profile')
+        with patch.object(kiosk, 'worker_recovery', side_effect=AssertionError('probe before readiness')) as probe:
+            self.start()
+            wait_for(lambda: self.supervisor.restarts >= 1)
+            self.supervisor.stop_event.set()
+            self.thread.join(3)
+            probe.assert_not_called()
+
+    def test_worker_probe_requires_token_and_ignores_missing_evidence(self):
+        self.start()
+        self.ready()
+        other_token = self.root / 'wrong-token'
+        other_token.write_text('a-different-private-token-12345')
+        self.assertIsNone(kiosk.worker_recovery({**self.config, 'token_file': str(other_token)}))
+        self.assertFalse(kiosk.worker_recovery(self.config)['eligible'])
 
     def test_lan_host_validation_accepts_only_rfc1918_ipv4(self):
         for host in ('10.2.3.4', '172.16.1.2', '172.31.255.254', '192.168.4.12'):

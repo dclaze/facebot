@@ -115,6 +115,7 @@ def create_app(token, engine=None):
             raise ValueError('Choose local TTS: kokoro or qwen3')
     occupied = asyncio.Lock()
     current_interaction = None
+    current_voice_socket = None
     current_task = None
     current_quips = None
     recorder = InteractionRecorder.configured()
@@ -159,6 +160,17 @@ def create_app(token, engine=None):
                 'tts':{'backend':'qwen3' if getattr(engine, 'supports_emotion', False) else 'kokoro', 'model':engine.model_name, 'voice':engine.voice,
                        'emotion_controls':getattr(engine, 'supports_emotion', False)},
                 'sound_effects':{'types':len(sound_bank.effects),'clips':len(sound_bank.pcm), 'automatic':sound_performance_config is not None, 'routing_version':2}}
+
+    @app.get('/recovery')
+    async def recovery(authorization: str = Header(default='')):
+        if not hmac.compare_digest(authorization, 'Bearer ' + token):
+            raise HTTPException(status_code=403)
+        from server.worker_progress import recovery_report
+        from starlette.websockets import WebSocketState
+        connected = (current_voice_socket is not None
+                     and current_voice_socket.client_state == WebSocketState.CONNECTED
+                     and current_voice_socket.application_state == WebSocketState.CONNECTED)
+        return recovery_report(engine, current_interaction, mute.value, connected=connected)
 
     @app.get('/runtime-settings')
     async def runtime_settings(authorization: str = Header(default='')):
@@ -263,7 +275,7 @@ def create_app(token, engine=None):
 
     @app.websocket('/voice')
     async def voice(ws: WebSocket):
-        nonlocal current_interaction, current_task, current_quips
+        nonlocal current_interaction, current_task, current_quips, current_voice_socket
         supplied = ws.headers.get('authorization', '')
         if not hmac.compare_digest(supplied, 'Bearer ' + token):
             await ws.close(code=1008)
@@ -273,6 +285,7 @@ def create_app(token, engine=None):
             return
         async with occupied:
             await ws.accept()
+            current_voice_socket = ws
             scene = SceneState()
             scene.encounter.silenced = mute.value
             interaction = InteractionState(scene)
@@ -311,6 +324,9 @@ def create_app(token, engine=None):
             current_task = task
             @transport.event_handler('on_client_disconnected')
             async def disconnected(transport, websocket):
+                nonlocal current_voice_socket
+                if current_voice_socket is ws:
+                    current_voice_socket = None
                 await task.cancel()
             try:
                 await PipelineRunner(handle_sigint=False).run(task)
@@ -322,6 +338,7 @@ def create_app(token, engine=None):
             finally:
                 probes.cancel()
                 current_interaction = None
+                current_voice_socket = None
                 current_task = None
                 current_quips = None
     @app.get('/vision/diagnostics')

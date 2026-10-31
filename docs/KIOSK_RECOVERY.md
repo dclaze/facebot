@@ -58,7 +58,7 @@ python3 scripts/kiosk-service.py uninstall
 
 A child has 180 seconds to become ready (including model/audio prewarming). Then the watchdog checks every 5 seconds, with a 2-second HTTP timeout and three consecutive failures before replacement. Child shutdown allows 10 seconds, then kills/reaps a stuck child. Retry delay doubles from 2 to a maximum of 60 seconds; two continuous healthy minutes reset it. Thus an indefinitely broken installation retries at most once per minute after the initial attempts, rather than thrashing. Launchd separately throttles supervisor respawns to 30 seconds. A `port_conflict` checks again after 0.25 seconds, doubling up to 5 seconds while occupied. This separate schedule lets voice and owner controls recover promptly after launchd releases an old listener; it never adopts or terminates another process.
 
-Each child watchdog has `recovery.log` plus two rotations, under 768 KiB per child (voice in the state directory, sidecars in their named subdirectories); status/configuration files are private, fixed-size records. No server output is captured. `backoff` includes a bounded classification (`child_exit`, `health_timeout`, `startup_timeout`, `start_error`), not an exception, environment or response body.
+Each child watchdog has `recovery.log` plus two rotations, under 768 KiB per child (voice in the state directory, sidecars in their named subdirectories); status/configuration files are private, fixed-size records. No server output is captured. `backoff` includes a bounded classification (`child_exit`, `health_timeout`, `startup_timeout`, `tts_unresponsive`, `start_error`), not an exception, environment or response body.
 
 ## Optional isolated vision Ollama
 
@@ -85,4 +85,22 @@ After authorized activation, the runtime owner records the actual release commit
 3. At an owner-approved idle boundary, terminate only the verified supervisor PID to test launchd replacement. Verify its old child was cleaned up, one replacement is ready and the tablet reconnects. Do not use a broad `pkill` or kill an unverified saved PID.
 4. Verify a real tablet response and owner mute after reconnection. Record observed timings as local production evidence. Keep synthetic hang/crash fixtures separately labeled.
 
-A reboot/login drill and long-duration mounted run remain separate acceptance observations. If health is fresh but speech is stuck, the current HTTP watchdog cannot diagnose it: preserve diagnostics for the runtime owner and use one coordinated `restart`; do not claim an automatic inference-pipeline repair. If a foreign process occupies the port, identify its owner and release it through that owner's controls instead of deleting the lock or repeatedly installing.
+A reboot/login drill and long-duration mounted run remain separate acceptance observations. The speech-worker check below covers only one class of stalled work. If speech is stuck without that evidence, preserve diagnostics for the runtime owner and use one coordinated `restart`; do not claim an automatic repair of every inference or transport failure. If a foreign process occupies the port, identify its owner and release it through that owner's controls instead of deleting the lock or repeatedly installing.
+
+
+## Unresponsive speech-worker recovery
+
+After readiness, the voice supervisor also reads authenticated, content-free `/recovery` evidence. It replaces its own voice child when a connected, unmuted session continuously demands synthesis, the same native TTS execution makes no observable progress, and both conditions persist for 90 seconds of supervisor observation. `--tts-stall-timeout SECONDS` at installation accepts 30–600 seconds; saved configurations without the field use 90. Invalid saved deadlines fail validation. The worker has its own monotonic progress age, and both that age and the supervisor observation deadline must expire. Polling adds up to roughly one health-check interval; shutdown then uses the existing 10-second terminate/kill/reap path and bounded restart backoff. Admin and vision children remain independently supervised.
+
+Cancellation of an asyncio waiter cannot stop native inference. Therefore a cancelled old call remains visible while it executes; a new demanded request waiting behind it can trigger recovery. Execution identity, progress and demand generation reset the observation deadline. A whole-render call records each completed segment as progress; streamed calls record each actual generator advancement. Time spent playing or buffering already-produced audio is not native execution. Idle, Quiet, disconnected sessions, cancelled work with no remaining demand, and queued work without a tracked executing worker do not trigger this policy. Missing, unauthorized or malformed telemetry clears the observation rather than claiming a stall. The check does not run during initial model prewarming or for sidecars.
+
+A native call with no observable output for longer than the configured bound is **unresponsive work**, not a proven deadlock. A legitimately slow single segment can exceed this policy; choose the conservative default unless measured local needs justify another value. This does not diagnose STT, LLM, playback, network, or general pipeline stalls, and HTTP readiness still does not prove an audible response. `/recovery` includes only counters, elapsed time and eligibility, never text, audio, model output or token values. Recovery logs use the fixed reason `tts_unresponsive`.
+
+Focused isolated checks (no live fault injection):
+
+```sh
+.venv/bin/python -m unittest discover -s tests -p test_worker_recovery.py -v
+.venv/bin/python -m unittest discover -s tests -p test_kiosk_service.py -v
+```
+
+The first reproduces a real blocked executor call plus cancelled/new demand while the app health route remains ready; other cases exercise progress and suppression. The supervisor test uses a disposable HTTP child with synthetic worker telemetry, ignored SIGTERM and capped repeated recovery, verifying that the admin child survives and no token reaches logs. These tests are not a physical kiosk recovery receipt. The runtime owner must record a separate controlled drill before claiming deployed worker recovery.

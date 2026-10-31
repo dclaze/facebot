@@ -11,6 +11,7 @@ from server.prepared_audio import PreparedAudioCache
 from server.captions import caption_cues
 from server.spoken_text import spoken_text
 from server.settings import read as read_settings
+from server.worker_progress import WorkerProgress
 from pipecat.services.tts_service import TTSService
 from pipecat.services.settings import TTSSettings
 
@@ -45,6 +46,22 @@ class SpeechEngine:
         self.executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix='facebot-tts')
         self.model = None
         self.prepared_cache = PreparedAudioCache(model)
+
+    @property
+    def worker_progress(self):
+        # Initialized on the event-loop thread before any tracked submission.
+        if not hasattr(self, '_worker_progress'):
+            self._worker_progress = WorkerProgress()
+        return self._worker_progress
+
+    async def _run_worker(self, function, *args):
+        progress = self.worker_progress
+        progress.waiting(1)
+        try:
+            return await asyncio.get_running_loop().run_in_executor(
+                self.executor, progress.run, function, *args)
+        finally:
+            progress.waiting(-1)
 
     def synthesize_segments(self, text):
         text = spoken_text(text)
@@ -85,6 +102,7 @@ class SpeechEngine:
     def synthesize(self, text, with_cues=False):
         chunks, mouth_cues, sample_offset = [], [], 0
         for audio, segment_cues in self.synthesize_segments(text):
+            self.worker_progress.advanced()
             chunks.append(audio)
             mouth_cues.extend([[start+sample_offset, end+sample_offset, shape]
                                for start, end, shape in segment_cues])
@@ -98,10 +116,9 @@ class SpeechEngine:
         # make a single short sentence into token-level streaming synthesis.
         iterator = (self.synthesize_segments(text) if emotion is None else
                     self.synthesize_segments(text, emotion=emotion))
-        loop = asyncio.get_running_loop()
         try:
             while True:
-                segment = await loop.run_in_executor(self.executor, next, iterator, None)
+                segment = await self._run_worker(next, iterator, None)
                 if segment is None:
                     break
                 yield segment
@@ -110,16 +127,16 @@ class SpeechEngine:
             # same worker; never run concurrent Metal calls or close on the loop.
             # Do not hold Pipecat's interruption path waiting for that inference.
             # Submit directly so task cancellation cannot cancel the queued close.
-            cleanup = self.executor.submit(iterator.close)
+            cleanup = self.executor.submit(self.worker_progress.run, iterator.close)
             task = asyncio.current_task()
             if not task or not task.cancelling():
                 await asyncio.shield(asyncio.wrap_future(cleanup))
 
     async def render(self, text):
-        return await asyncio.get_running_loop().run_in_executor(self.executor, self.synthesize, text)
+        return await self._run_worker(self.synthesize, text)
 
     async def render_with_cues(self, text):
-        return await asyncio.get_running_loop().run_in_executor(self.executor, self.synthesize, text, True)
+        return await self._run_worker(self.synthesize, text, True)
 
 
 class LocalTTS(TTSService):
