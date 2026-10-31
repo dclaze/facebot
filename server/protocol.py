@@ -39,6 +39,11 @@ class FaceSerializer(FrameSerializer):
                 self.probes.sent(identifier, self.epoch, self.output_samples)
             return json.dumps({'type': 'playback_probe', 'id': identifier,
                                'epoch': self.epoch, 'offset': self.output_samples})
+        if isinstance(frame, OutputTransportMessageFrame) and frame.message.get('type') == 'kiosk_state':
+            muted = frame.message.get('muted')
+            if type(muted) is not bool:
+                raise ValueError('Invalid kiosk state')
+            return json.dumps({'type':'kiosk_state', 'muted':muted, 'epoch':self.epoch})
         if isinstance(frame, OutputTransportMessageFrame) and frame.message.get('type') == 'visemes':
             if 'captions' in frame.message:
                 validate_captions(frame.message['captions'])

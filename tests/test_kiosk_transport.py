@@ -54,3 +54,17 @@ class FaceCueTests(unittest.IsolatedAsyncioTestCase):
         for duration in [-1, True, 480001]:
             with self.assertRaises(ValueError):
                 await serializer.serialize(OutputTransportMessageFrame(message={'type':'performance_face', 'name':'wolf_eyes', 'duration_samples':duration}))
+
+    async def test_quiet_state_uses_current_epoch_and_strict_boolean(self):
+        serializer = FaceSerializer()
+        await serializer.serialize(InterruptionFrame())
+        cue = json.loads(await serializer.serialize(OutputTransportMessageFrame(message={'type':'kiosk_state','muted':True})))
+        self.assertEqual(cue, {'type':'kiosk_state','muted':True,'epoch':1})
+        for value in [1, 'false', None]:
+            with self.assertRaises(ValueError):
+                await serializer.serialize(OutputTransportMessageFrame(message={'type':'kiosk_state','muted':value}))
+
+    async def test_even_native_timing_median(self):
+        probes = PlaybackProbes()
+        probes.results.extend([{'status':'played','dispatch_to_native_ack_ms':100}, {'status':'played','dispatch_to_native_ack_ms':200}])
+        self.assertEqual(probes.report()['summary']['p50_ms'], 150)

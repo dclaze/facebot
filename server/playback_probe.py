@@ -5,6 +5,7 @@ These measurements must never be presented as visitor-end-to-audible latency.
 """
 from collections import deque
 import math
+import statistics
 import time
 import uuid
 
@@ -60,5 +61,5 @@ class PlaybackProbes:
         values = sorted(x['dispatch_to_native_ack_ms'] for x in self.results if x['status'] == 'played')
         return {'evidence': 'host dispatch to native AudioTrack head acknowledgement; includes return Wi-Fi; excludes VAD, STT and acoustic output',
                 'samples': list(self.results), 'pending': self.pending['id'] if self.pending else None,
-                'summary': {'n': len(values), 'p50_ms': values[len(values)//2],
+                'summary': {'n': len(values), 'p50_ms': statistics.median(values),
                             'p95_ms': values[math.ceil(len(values)*.95)-1]} if values else None}
