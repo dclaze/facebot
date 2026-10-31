@@ -28,6 +28,7 @@ final class VoiceClient extends WebSocketListener {
     private final ArrayDeque<MouthCue> mouthCues = new ArrayDeque<>();
     private final CaptionTimeline captions = new CaptionTimeline();
     private final PlaybackProbe playbackProbe=new PlaybackProbe();
+    private final KioskStatus kioskStatus=new KioskStatus();
     private long writtenSamples;
     private java.util.function.Consumer<JSONObject> videoListener=event -> {};
     void setVideoListener(java.util.function.Consumer<JSONObject> listener){videoListener=listener;}
@@ -140,7 +141,7 @@ final class VoiceClient extends WebSocketListener {
                 captureThread=new Thread(this::capture,"facebot-capture");
                 playbackThread=new Thread(this::playback,"facebot-playback");
                 captureThread.start(); playbackThread.start();
-                listener.state("Listening",false);
+                listener.state(kioskStatus.readyText(),false);
             } catch(Exception error) { fail(); }
         });
     }
@@ -167,7 +168,7 @@ final class VoiceClient extends WebSocketListener {
                 PlaybackQueue.Packet p=output.poll();
                 if(p==null) {
                     observePlayback();
-                    listener.state("Listening",false); continue;
+                    listener.state(kioskStatus.readyText(),false); continue;
                 }
                 int offset=0;
                 while(offset<p.pcm.length && !closed.get() && p.epoch==epoch) {
@@ -181,7 +182,7 @@ final class VoiceClient extends WebSocketListener {
                     offset+=n;
                     if(n==0) Thread.sleep(2);
                 }
-                if(p.epoch==epoch && !closed.get()) listener.state("Listening",true);
+                if(p.epoch==epoch && !closed.get()) listener.state(kioskStatus.readyText(),true);
                 observePlayback();
             }
         } catch(InterruptedException done) { Thread.currentThread().interrupt(); }
@@ -226,6 +227,16 @@ final class VoiceClient extends WebSocketListener {
                 if(incoming<epoch)return;
                 if(incoming>epoch)flush(incoming);
                 videoListener.accept(event);
+            }
+            else if(event.getString("type").equals("kiosk_state")) {
+                long incoming=event.getLong("epoch");
+                if(incoming<epoch) return;
+                if(!(event.get("muted") instanceof Boolean)) return;
+                if(incoming>epoch) flush(incoming);
+                synchronized(audioLock) {
+                    kioskStatus.apply(incoming,epoch,event.getBoolean("muted"));
+                }
+                listener.state(kioskStatus.readyText(),false);
             }
             else if(event.getString("type").equals("playback_probe")) {
                 synchronized(audioLock) {
@@ -288,7 +299,7 @@ final class VoiceClient extends WebSocketListener {
             epoch=next; playbackProbe.reset(); performanceFace.reset(); output.clear(); mouthCues.clear(); captions.reset(next); writtenSamples=0;
             if(player!=null) { player.pause(); player.flush(); if(!closed.get()) player.play(); }
         }
-        listener.state("Listening",false);
+        listener.state(kioskStatus.readyText(),false);
     }
     @Override public void onFailure(WebSocket ws,Throwable error,Response response) { fail(); }
     @Override public void onClosed(WebSocket ws,int code,String reason) { fail(); }
@@ -301,6 +312,7 @@ final class VoiceClient extends WebSocketListener {
         if(!closed.compareAndSet(false,true)) return;
         if(socket!=null) socket.cancel();
         output.clear();
+        kioskStatus.reset();
         synchronized(audioLock) {
             mouthCues.clear(); captions.reset(epoch); playbackProbe.reset(); performanceFace.reset();
             if(player!=null) { try { player.pause(); player.flush(); } catch(IllegalStateException ignored) { } }

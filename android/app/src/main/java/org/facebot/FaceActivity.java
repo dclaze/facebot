@@ -147,7 +147,7 @@ public final class FaceActivity extends ComponentActivity {
         voice = new VoiceClient(this, (message, talking) -> main.post(() -> {
             if (!resumed || generation != connectionGeneration) return;
             state = message; speaking = talking;
-            if(message.equals("Listening")) {
+            if(message.equals("Listening") || message.equals("Quiet mode")) {
                 long now=android.os.SystemClock.elapsedRealtime();
                 if(readySince==0) readySince=now;
                 if(now-readySince>10000) failures=0;
