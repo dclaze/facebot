@@ -50,6 +50,54 @@ class PriorityTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(self.gate.should_defer(self.voice))
         self.assertEqual(self.state.priority_refreshes, 2)
 
+    def test_existing_observation_deadline_prevents_actual_slow_refresh_gap(self):
+        # Native captures at most every 1.5s; measured warm inference is 2.1s.
+        # Old 3s deferral would admit at 5.1 and finish 7.2, after the 6s TTL.
+        self.now[0] = 2.1
+        self.state.accept(['cup'], 0, 2100)
+        self.voice.bot_speaking = True
+        self.assertTrue(self.gate.should_defer(self.voice))
+        self.assertEqual(self.state.observed_at, 0)
+        self.now[0] = 3.6
+        self.assertFalse(self.gate.should_defer(self.voice))
+        self.assertEqual(self.state.priority_refreshes, 1)
+        self.now[0] = 5.7
+        self.assertTrue(self.state.fresh())
+        self.assertTrue(self.state.accept(['cup'], 3.6, 2100))
+        self.assertEqual(self.state.report()['age_ms'], 2100)
+
+    def test_already_aged_observation_refreshes_on_first_busy_frame(self):
+        self.state.accept(['cup'], 6, 2100)
+        self.voice.stt.inference_active = True
+        self.assertFalse(self.gate.should_defer(self.voice))
+        self.assertEqual(self.state.deferred_frames, 0)
+        self.assertEqual(self.state.observed_at, 6)
+
+    def test_budget_tracks_recent_inference_and_reconnect_does_not_reset_deadline(self):
+        self.state.accept(['cup'], 8, 2000)
+        self.voice.user_speaking = True
+        self.assertTrue(self.gate.should_defer(self.voice))
+        self.state.inference_ms = 3200
+        replacement = InteractionState(SceneState(), clock=lambda: self.now[0])
+        replacement.user_speaking = True
+        self.assertFalse(self.gate.should_defer(replacement))
+        self.assertEqual(self.state.observed_at, 8)
+
+    def test_unexpected_slow_inference_still_expires_and_cannot_fake_freshness(self):
+        self.now[0] = 2.1
+        self.state.accept(['cup'], 0, 2100)
+        self.voice.bot_speaking = True
+        self.now[0] = 3.6
+        self.assertFalse(self.gate.should_defer(self.voice))
+        self.now[0] = 7.3  # In-flight work is slower than the previous estimate.
+        self.assertFalse(self.state.fresh())
+        self.assertEqual(self.state.report()['age_ms'], 7300)
+        self.assertEqual(self.state.report()['labels'], [])
+        self.now[0] = 10
+        self.assertFalse(self.state.accept(['cup'], 3.6, 6400))
+        self.assertEqual(self.state.observed_at, 0)
+        self.assertFalse(self.state.fresh())
+
     def test_quiet_grace_is_300ms_and_disconnect_drops_old_state(self):
         for field_owner, field in ((self.voice, 'last_activity'), (self.voice.stt, 'last_inference_finished')):
             setattr(field_owner, field, self.now[0])
@@ -66,7 +114,7 @@ class PriorityTests(unittest.IsolatedAsyncioTestCase):
     async def test_real_labeler_skips_http_without_refreshing_stale_observation(self):
         self.state.accept(['cup'], 9, 0)
         self.state.accept(['cup'], 10, 0)
-        self.now[0] = 17
+        self.now[0] = 11
         self.voice.user_speaking = True
         labeler = ImageLabeler(self.state, should_defer=lambda: self.gate.should_defer(self.voice))
         await labeler.client.aclose()
@@ -83,16 +131,16 @@ class PriorityTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(self.state.observed_at, 10)
             self.assertEqual(self.state.frames, 2)
             self.assertEqual(self.state.errors, 0)
+            self.now[0] = 17
             self.assertEqual(self.state.report()['age_ms'], 7000)
             self.assertFalse(self.state.report()['fresh'])
             self.assertEqual(self.state.context(), '')
             self.assertEqual(self.state.report()['labels'], [])
             with self.assertRaises(ValueError):
                 await labeler.label(image.getvalue(), age_ms=1001)
-            self.now[0] += self.state.TTL / 2
             self.assertTrue(await labeler.label(image.getvalue()))
             self.assertEqual(len(requests), 1)
-            self.assertEqual(self.state.observed_at, 20)
+            self.assertEqual(self.state.observed_at, 17)
         finally:
             await labeler.close()
 

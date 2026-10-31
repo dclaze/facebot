@@ -149,10 +149,14 @@ The 20-sample minimum is the runner's reporting protocol; it is not a claim of s
 New camera inference is deferred during visitor speech, active transcription,
 response generation and playback, with a 300 ms quiet grace. Each deferred frame
 is acknowledged and discarded rather than queued. Continuous deferral is capped
-at three seconds (half the six-second vision freshness window), so prolonged
-speech or a stuck activity flag still permits a new camera observation. This can
-allow an inference to overlap a long voice turn. An already submitted Ollama
-request cannot be preempted by this gate. Camera timestamps and expiry remain
-unchanged: deferral may make observations stale, and stale labels stay excluded.
+at three seconds (half the six-second vision freshness window). When an observation
+already exists, refresh is admitted earlier if waiting for the next native capture
+(1.5 seconds), the last measured inference duration, and 200 ms of headroom would
+reach its expiry. This accounts for time already spent observing and processing
+the scene; a fresh deferral timer does not grant an old observation more lifetime.
+A refresh can overlap a long voice turn. An already submitted Ollama request
+cannot be preempted, and slower inference or capture delays can still produce a
+stale interval. Camera timestamps and the six-second expiry remain unchanged;
+stale labels stay excluded even when the scheduling estimate is exceeded.
 Owner vision diagnostics expose deferred-frame and priority-refresh counts.
 These are scheduling receipts, not evidence of lower acoustic or recognition latency.

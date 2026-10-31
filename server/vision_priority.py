@@ -3,6 +3,10 @@
 
 class VisionPriority:
     QUIET_GRACE_SECONDS = .3
+    # Native VisionClient samples at 1500ms. Skipping this frame spends that
+    # interval before the next opportunity to start inference.
+    NEXT_CAPTURE_SECONDS = 1.5
+    REFRESH_HEADROOM_SECONDS = .2
 
     def __init__(self, state):
         self.state = state
@@ -23,13 +27,26 @@ class VisionPriority:
             return False
         if self.deferred_since is None:
             self.deferred_since = now
-        if now >= self.deferred_since + self.max_deferral_seconds:
+        if self._refresh_due(now) or now >= self.deferred_since + self.max_deferral_seconds:
             self.deferred_since = None
             self.state.priority_refreshes += 1
             return False
         self.state.deferred_frames += 1
         self.state.last_defer_reason = reason
         return True
+
+    def _refresh_due(self, now):
+        observed_at = self.state.observed_at
+        if observed_at is None:
+            return False  # No existing observation; the starvation cap applies.
+        recent_ms = self.state.inference_ms
+        inference_seconds = self.state.TTL / 2 if recent_ms is None else max(0, recent_ms / 1000)
+        # Admit now if waiting for the next frame plus another measured
+        # inference would spend the remaining observation lifetime. This is
+        # best effort: an in-flight inference cannot be preempted and a slower
+        # next request may still expire. Never move observed_at or extend TTL.
+        next_completion = now + self.NEXT_CAPTURE_SECONDS + inference_seconds + self.REFRESH_HEADROOM_SECONDS
+        return next_completion >= observed_at + self.state.TTL
 
     def _reason(self, interaction, now):
         if interaction is None:
