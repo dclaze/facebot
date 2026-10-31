@@ -25,6 +25,8 @@ final class VoiceClient extends WebSocketListener {
     private final PlaybackQueue output = new PlaybackQueue();
     private final AtomicBoolean closed = new AtomicBoolean(false);
     private final Object audioLock = new Object();
+    private final EchoControl echoControl = new EchoControl(EchoControl.needsHalfDuplex(
+        android.os.Build.MANUFACTURER, android.os.Build.MODEL, android.os.Build.VERSION.SDK_INT));
     private final ArrayDeque<MouthCue> mouthCues = new ArrayDeque<>();
     private final CaptionTimeline captions = new CaptionTimeline();
     private final PlaybackProbe playbackProbe=new PlaybackProbe();
@@ -117,20 +119,27 @@ final class VoiceClient extends WebSocketListener {
                 if (closed.get()) return;
                 manager=(AudioManager)context.getSystemService(Context.AUDIO_SERVICE);
                 oldMode=manager.getMode(); oldSpeaker=manager.isSpeakerphoneOn();
-                manager.setMode(AudioManager.MODE_IN_COMMUNICATION); manager.setSpeakerphoneOn(true);
+                if (!echoControl.halfDuplex) {
+                    manager.setMode(AudioManager.MODE_IN_COMMUNICATION); manager.setSpeakerphoneOn(true);
+                }
                 int inSize=AudioRecord.getMinBufferSize(16000, AudioFormat.CHANNEL_IN_MONO,AudioFormat.ENCODING_PCM_16BIT);
-                recorder=new AudioRecord(MediaRecorder.AudioSource.VOICE_COMMUNICATION,16000,AudioFormat.CHANNEL_IN_MONO,
+                int source=echoControl.halfDuplex ? MediaRecorder.AudioSource.VOICE_RECOGNITION
+                    : MediaRecorder.AudioSource.VOICE_COMMUNICATION;
+                recorder=new AudioRecord(source,16000,AudioFormat.CHANNEL_IN_MONO,
                     AudioFormat.ENCODING_PCM_16BIT,Math.max(3200,inSize));
                 if (recorder.getState()!=AudioRecord.STATE_INITIALIZED) throw new IllegalStateException();
-                if (AcousticEchoCanceler.isAvailable()) {
+                if (!echoControl.halfDuplex && AcousticEchoCanceler.isAvailable()) {
                     echo=AcousticEchoCanceler.create(recorder.getAudioSessionId());
                     if (echo!=null) echo.setEnabled(true);
                 }
-                Log.i("FacebotAudio", "Native capture initialized; platform AEC enabled=" + (echo!=null && echo.getEnabled()));
+                Log.i("FacebotAudio", echoControl.halfDuplex
+                    ? "Native capture initialized; Lenovo compatibility half-duplex, no platform AEC requested"
+                    : "Native capture initialized; platform AEC enabled=" + (echo!=null && echo.getEnabled()));
                 int outSize=AudioTrack.getMinBufferSize(24000,AudioFormat.CHANNEL_OUT_MONO,AudioFormat.ENCODING_PCM_16BIT);
                 synchronized(audioLock) {
                     player=new AudioTrack.Builder().setAudioAttributes(new AudioAttributes.Builder()
-                        .setUsage(AudioAttributes.USAGE_VOICE_COMMUNICATION).setContentType(AudioAttributes.CONTENT_TYPE_SPEECH).build())
+                        .setUsage(echoControl.halfDuplex ? AudioAttributes.USAGE_MEDIA : AudioAttributes.USAGE_VOICE_COMMUNICATION)
+                        .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH).build())
                         .setAudioFormat(new AudioFormat.Builder().setSampleRate(24000).setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
                         .setEncoding(AudioFormat.ENCODING_PCM_16BIT).build()).setBufferSizeInBytes(Math.max(1920,outSize))
                         .setTransferMode(AudioTrack.MODE_STREAM).build();
@@ -155,6 +164,12 @@ final class VoiceClient extends WebSocketListener {
                 if (!captureObserved) {
                     captureObserved=true;
                     Log.i("FacebotAudio", "Native microphone PCM received");
+                }
+                synchronized(audioLock) {
+                    boolean pending=output.queuedBytes()>0 || (player!=null
+                        && Integer.toUnsignedLong(player.getPlaybackHeadPosition())<writtenSamples);
+                    if(echoControl.silenceCapture(android.os.SystemClock.elapsedRealtime(),pending))
+                        Arrays.fill(pcm,0,n,(byte)0); // Keep capture/VAD timing; never upload our own speaker echo.
                 }
                 WebSocket ws=socket;
                 if(ws==null || ws.queueSize()>6400 || !ws.send(ByteString.of(pcm,0,n))) { fail(); break; }
@@ -214,8 +229,14 @@ final class VoiceClient extends WebSocketListener {
         long incoming=ByteBuffer.wrap(message,0,8).order(ByteOrder.BIG_ENDIAN).getLong();
         if(incoming<epoch) return;
         if(incoming>epoch) flush(incoming);
-        if(!output.offer(incoming,Arrays.copyOfRange(message,8,message.length)))
-            fail(); // Atomic rejection on overrun; never accumulate unbounded stale speech.
+        boolean accepted;
+        synchronized(audioLock) {
+            // Flush may have advanced the epoch while this packet was decoded.
+            if(incoming!=epoch || closed.get()) return;
+            accepted=output.offer(incoming,Arrays.copyOfRange(message,8,message.length));
+            if(accepted) echoControl.outputActivity(android.os.SystemClock.elapsedRealtime());
+        }
+        if(!accepted) fail(); // Atomic rejection; never accumulate unbounded stale speech.
     }
     @Override public void onMessage(WebSocket ws,String message) {
         if(closed.get()) return;
@@ -296,6 +317,9 @@ final class VoiceClient extends WebSocketListener {
     private void flush(long next) {
         synchronized(audioLock) {
             if(next<epoch) return;
+            if(output.queuedBytes()>0 || (player!=null
+                    && Integer.toUnsignedLong(player.getPlaybackHeadPosition())<writtenSamples))
+                echoControl.outputActivity(android.os.SystemClock.elapsedRealtime());
             epoch=next; playbackProbe.reset(); performanceFace.reset(); output.clear(); mouthCues.clear(); captions.reset(next); writtenSamples=0;
             if(player!=null) { player.pause(); player.flush(); if(!closed.get()) player.play(); }
         }
@@ -326,7 +350,9 @@ final class VoiceClient extends WebSocketListener {
             synchronized(audioLock) { if(player!=null) { player.pause(); player.flush(); player.release(); player=null; } }
             if(echo!=null) echo.release();
             if(recorder!=null) recorder.release();
-            if(manager!=null) { manager.setSpeakerphoneOn(oldSpeaker); manager.setMode(oldMode); }
+            if(manager!=null && !echoControl.halfDuplex) {
+                manager.setSpeakerphoneOn(oldSpeaker); manager.setMode(oldMode);
+            }
             http.dispatcher().executorService().shutdown(); http.connectionPool().evictAll();
             control.shutdown();
         });
