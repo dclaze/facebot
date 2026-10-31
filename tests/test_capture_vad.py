@@ -8,13 +8,13 @@ from server.capture_vad import CaptureVAD, LENOVO_RAW_CAPTURE
 
 
 class CaptureVADTests(unittest.TestCase):
-    def test_only_exact_profile_enables_gain_and_existing_thresholds_stay(self):
+    def test_only_exact_profile_enables_raw_capture_calibration(self):
         for profile, gain in (('',1),('unknown',1),('lenovo',1),(LENOVO_RAW_CAPTURE,4)):
             with self.subTest(profile=profile):
                 vad=CaptureVAD(profile)
                 self.addCleanup(vad._executor.shutdown)
                 self.assertEqual(vad.confidence_gain,gain)
-                self.assertEqual(vad.params.confidence,.7)
+                self.assertEqual(vad.params.confidence,.5 if profile==LENOVO_RAW_CAPTURE else .7)
                 self.assertEqual(vad.params.min_volume,.6)
                 self.assertEqual(vad.params.start_secs,.1)
                 self.assertEqual(vad.params.stop_secs,.45)

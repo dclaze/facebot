@@ -19,7 +19,11 @@ class CaptureVAD(SileroVADAnalyzer):
                          'last_candidate_at': None, 'last_start_at': None, 'last_stop_at': None}
         self._snapshot = dict(self._metrics)
         self._stable_state = VADState.QUIET
-        super().__init__(params=VADParams(start_secs=.1, stop_secs=.45))
+        # Raw-profile short words can remain below the generic .7 confidence
+        # threshold even at valid original volume. Keep the existing duration
+        # and volume gates; the normal/processed capture path remains unchanged.
+        confidence = .5 if self.capture_profile == LENOVO_RAW_CAPTURE else .7
+        super().__init__(params=VADParams(confidence=confidence, start_secs=.1, stop_secs=.45))
 
     def voice_confidence(self, buffer):
         # Raw VOICE_RECOGNITION on this exact profile has much lower amplitude

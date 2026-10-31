@@ -76,8 +76,9 @@ This is an app-scoped mitigation, not a repair or disablement of the vendor audi
 The affected Lenovo profile identifies its raw capture path with
 `X-Facebot-Capture-Profile: lenovo-j606f-raw-v1`. The host applies a fixed 4x gain
 only to Silero's speech-confidence analysis buffer for that exact profile;
-recorded/transmitted microphone PCM, ASR input, volume threshold, confidence
-threshold and onset/stop durations remain unchanged. Other profiles use 1x.
+recorded/transmitted microphone PCM, ASR input, volume threshold and onset/stop
+durations remain unchanged. Other profiles use 1x. The raw-profile confidence
+threshold and its evidence are described below.
 Controlled microphone replay recovered short low-amplitude greetings that the
 unchanged detector missed, while the tested quiet/noise controls stayed quiet.
 This is a bounded replay result, not a general noise-accuracy guarantee. Owner
@@ -90,3 +91,12 @@ before and after a controlled phrase: candidates without a start point to detect
 state/timing; starts without an ASR utterance point downstream. These counters
 retain no PCM or text, reset on voice reconnect, and do not prove acoustic capture
 or recognition. A replay that detects a phrase does not establish live acceptance.
+
+The raw Lenovo profile uses confidence 0.5 with the same original-volume 0.6,
+100ms onset and 450ms endpoint gates. Generic and processed capture retain 0.7.
+This follows a live failed short greeting with valid volume but no qualifying
+confidence frames, reproduced under varied preceding PCM histories. The narrow
+change detected 39/39 history variants and 144/144 additional controlled speech
+replays across eight sample alignments; 72 recorded/synthetic quiet and noise
+replays remained quiet. These are local replay results, not a substitute for
+live microphone acceptance or a guarantee for other voices and environments.
