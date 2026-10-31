@@ -230,14 +230,20 @@ class Supervisor:
             os.chmod(self.state / 'recovery.log', 0o600)
             self.logger.addHandler(handler)
             failures = 0
+            port_retry_delay = .25
             try:
                 self.start_support()
                 while not self.stop_event.is_set():
                     if port_occupied(self.config['port'], self.config.get('host', '127.0.0.1')):
                         # A manual release or orphan is not ours to kill/adopt.
-                        self.report('port_conflict')
-                        self.stop_event.wait(self.config['backoff_max'])
+                        # launchd may still be releasing a previous child's
+                        # listener. Check without adopting or signalling it;
+                        # crash backoff would unnecessarily delay this handoff.
+                        self.report('port_conflict', retry_seconds=port_retry_delay)
+                        self.stop_event.wait(port_retry_delay)
+                        port_retry_delay = min(5, port_retry_delay * 2)
                         continue
+                    port_retry_delay = .25
                     try:
                         self.spawn()
                         born = time.monotonic()

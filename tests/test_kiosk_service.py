@@ -295,6 +295,42 @@ class KioskRecoveryTests(unittest.TestCase):
         with self.assertRaises(ProcessLookupError):
             os.kill(first, 0)
 
+    def transient_listener_recovers(self, role):
+        # Use the production crash-loop maximum: the previous code reused this
+        # 60-second delay even for an old listener disappearing during bootout.
+        self.config.update(role=role, backoff_max=60)
+        with socket.socket() as listener:
+            listener.bind(('127.0.0.1', self.config['port']))
+            listener.listen()
+            self.start()
+            wait_for(lambda: self.status().get('phase') == 'port_conflict')
+            self.assertIsNone(self.supervisor.child)
+            self.assertFalse((self.root / 'starts').exists())
+        started = time.monotonic()
+        wait_for(lambda: self.status().get('phase') == 'ready', timeout=2)
+        self.assertLess(time.monotonic() - started, 2)
+
+    def test_voice_recovers_promptly_after_transient_old_listener_releases(self):
+        self.transient_listener_recovers('voice')
+
+    def test_admin_recovers_promptly_after_transient_old_listener_releases(self):
+        self.transient_listener_recovers('admin')
+
+    def test_occupied_port_recheck_has_independent_capped_backoff(self):
+        class RecordedStop:
+            def __init__(self): self.waits = []; self.stopped = False
+            def is_set(self): return self.stopped or len(self.waits) >= 8
+            def wait(self, seconds): self.waits.append(seconds)
+            def set(self): self.stopped = True
+        stop = RecordedStop()
+        self.supervisor.stop_event = stop
+        self.config['backoff_max'] = 60
+        with patch.object(kiosk, 'port_occupied', return_value=True):
+            self.supervisor.run()
+        self.assertEqual(stop.waits, [.25, .5, 1, 2, 4, 5, 5, 5])
+        self.assertIsNone(self.supervisor.child)
+        self.assertFalse((self.root / 'starts').exists())
+
     def test_foreign_listener_is_never_killed_or_adopted(self):
         with socket.socket() as listener:
             listener.bind(('127.0.0.1', self.config['port']))
@@ -316,7 +352,9 @@ class KioskRecoveryTests(unittest.TestCase):
     def test_crash_loop_has_capped_exponential_backoff(self):
         (self.root / 'mode').write_text('exit')
         self.start()
-        wait_for(lambda: self.supervisor.restarts >= 4)
+        # The in-memory count advances before its log record is emitted.
+        wait_for(lambda: (self.state / 'recovery.log').exists() and
+                 (self.state / 'recovery.log').read_text().count('"phase": "backoff"') >= 4)
         entries = [json.loads(line) for line in (self.state / 'recovery.log').read_text().splitlines()]
         retries = [entry['retry_seconds'] for entry in entries if entry['phase'] == 'backoff']
         self.assertEqual(retries[:4], [.1, .2, .4, .4])
