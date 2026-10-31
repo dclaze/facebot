@@ -200,6 +200,7 @@ public final class FaceActivity extends ComponentActivity {
             case "Reconnecting": status="Reconnecting to the host.";break;
             default: status=state+".";
         }
+        if(quietControl.localHold) status="Speech paused here. Tap Resume to allow speech.";
         String description=characterName+". "+status+" Owner setup is available in accessibility actions.";
         // Called by actual state/name changes, never by drawing or gaze updates.
         // Identical playback-ready ticks do not repeatedly announce themselves.
@@ -448,7 +449,7 @@ public final class FaceActivity extends ComponentActivity {
             paint.setTypeface(android.graphics.Typeface.create("sans-serif-condensed",android.graphics.Typeface.BOLD));
             paint.setTextSize(w*.045f);canvas.drawText(characterName.toUpperCase(java.util.Locale.ROOT),w*.5f,h*.80f,paint);
             paint.setTypeface(android.graphics.Typeface.DEFAULT);paint.setTextSize(w*.031f);paint.setAlpha(190);
-            String visitorState=state.equals("Listening") ? "Say hello" : state.equals("Reconnecting") || state.equals("Connecting") ? "One moment… reconnecting" : state;
+            String visitorState=quietControl.localHold ? "Speech paused · tap Resume" : state.equals("Listening") ? "Say hello" : state.equals("Reconnecting") || state.equals("Connecting") ? "One moment… reconnecting" : state;
             canvas.drawText(previewShape!=null?"SYNTHETIC / "+previewShape:visitorState,w*.5f,h*.85f,paint);paint.setAlpha(255);
             if(endpoint==null) { paint.setTextSize(w*.024f);canvas.drawText("Owner: hold the upper-left corner for 5 seconds",w*.5f,h*.90f,paint); }
             if(diagnostics) { paint.setTextSize(w*.022f);canvas.drawText(visionState,w*.5f,h*.94f,paint); }
