@@ -202,6 +202,8 @@ def software_checks(root, python, quick, check_only, work):
     java = str(Path(javac).with_name('java')) if javac else None
     for name in NATIVE:
         inputs = [source / (name + '.java'), root / 'tests' / (name + 'Test.java')]
+        if name == 'KioskStatus':
+            inputs.append(source / 'PerformanceFaceCue.java')
         if not all(path.is_file() for path in inputs):
             rows.append(item('android:' + name, 'missing', 'none'))
         elif check_only or quick:
