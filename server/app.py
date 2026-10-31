@@ -342,7 +342,7 @@ def create_app(token, engine=None):
                     except Exception as error:
                         # Class only: never retain image/model output or exception text.
                         vision.errors += 1
-                        vision.last_error_kind = type(error).__name__
+                        vision.last_error_kind = ({'Truncated labels':'truncated_output', 'Invalid labels':'invalid_labels', 'Invalid people observations':'invalid_people', 'Invalid person description':'invalid_person', 'Invalid vision output':'invalid_schema', 'Expected a JPEG no larger than 640 pixels':'invalid_jpeg', 'Invalid image envelope':'invalid_envelope'}.get(str(error), type(error).__name__))
                     await ws.send_json(vision.report())
             except Exception:
                 pass  # Connection closure must never tear down the voice pipeline.

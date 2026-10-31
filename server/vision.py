@@ -75,6 +75,7 @@ class VisionState:
         self.frames = 0
         self.errors = 0
         self.last_error_kind = None
+        self.last_reply_shape = None
         self.version = 0
         self.last_commented = ()
         self.last_comment = float('-inf')
@@ -136,7 +137,7 @@ class VisionState:
         return {'kind': 'visual_labels', 'labels': self.labels, 'version': self.version}
 
     def report(self):
-        return {'model': MODEL, 'frames': self.frames, 'errors': self.errors, 'last_error_kind': self.last_error_kind,
+        return {'model': MODEL, 'frames': self.frames, 'errors': self.errors, 'last_error_kind': self.last_error_kind, 'last_reply_shape': self.last_reply_shape,
                 'fresh': self.fresh(), 'labels': list(self.labels) if self.fresh() else [],
                 'candidates': list(self.previous) if self.fresh() else [],
                 'people': [{'position':p,'age_band':a,'items':list(i)} for p,a,i in self.people] if self.fresh() else [],
@@ -175,6 +176,8 @@ class ImageLabeler:
             })
             response.raise_for_status()
             result = response.json()
+            message = result.get('message', {})
+            self.state.last_reply_shape = {'content_chars': len(message.get('content','')), 'thinking_chars': len(message.get('thinking','')), 'generated_tokens': result.get('eval_count')}
             if result.get('done_reason') == 'length':
                 raise ValueError('Truncated labels')
             payload = json.loads(result['message']['content'])
