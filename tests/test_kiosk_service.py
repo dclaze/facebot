@@ -221,6 +221,55 @@ class KioskRecoveryTests(unittest.TestCase):
         self.assertEqual(kiosk.SleepGuard(stop, self.supervisor.logger).command,
                          ['/usr/bin/caffeinate', '-i', '-w', str(os.getpid())])
 
+    def test_usb_selection_is_authorized_unique_and_never_in_command_arguments(self):
+        adb = self.root / 'adb'
+        adb.write_text('test fixture')
+        adb.chmod(0o700)
+        inventory = 'List of devices attached\nfixture-usb device usb:123 product:fixture\n192.168.1.3:5555 device product:wireless\n'
+        with patch.object(kiosk.subprocess, 'run', return_value=SimpleNamespace(stdout=inventory)) as command:
+            selected = kiosk.select_usb_tablet(str(adb))
+            self.assertEqual(selected['serial'], 'fixture-usb')
+            self.assertNotIn('fixture-usb', command.call_args.args[0])
+            self.assertEqual(command.call_args.args[0][1:], ['devices', '-l'])
+        for inventory in ('fixture-usb unauthorized usb:123\n',
+                          'first device usb:1\nsecond device usb:2\n',
+                          '192.168.1.3:5555 device usb:fake\n'):
+            with patch.object(kiosk.subprocess, 'run', return_value=SimpleNamespace(stdout=inventory)):
+                with self.assertRaises(ValueError): kiosk.select_usb_tablet(str(adb))
+
+    def test_tablet_identifier_is_private_config_only(self):
+        args = type('Args', (), {})()
+        destination = self.root / 'fixture.plist'
+        config = {**self.config, 'tablet_watchdog_selection': dict(enabled=True, adb='/fixture/adb',
+                    serial='fixture-private-identifier', interval_s=5, max_restarts_per_10min=3)}
+        with patch.object(kiosk, 'is_loaded', return_value=False), \
+             patch.object(kiosk, 'build_config', return_value=config), \
+             patch.object(kiosk, 'port_occupied', return_value=False), \
+             patch.object(kiosk, 'plist_path', return_value=destination), \
+             patch.object(kiosk, 'launchctl'):
+            kiosk.install(args, self.state)
+        private = self.state / 'tablet-watchdog.json'
+        self.assertEqual(json.loads(private.read_text())['serial'], 'fixture-private-identifier')
+        self.assertEqual(private.stat().st_mode & 0o777, 0o600)
+        for public in (destination, self.state / 'config.json'):
+            self.assertNotIn('fixture-private-identifier', public.read_text())
+        command = json.loads((self.state / 'config.json').read_text())['tablet_watchdog']['command']
+        self.assertEqual(command[-2:], ['--config', str(private)])
+
+    def test_tablet_helper_has_one_owner_and_stops_with_voice_and_admin(self):
+        self.configure_admin_fixture()
+        self.config['tablet_watchdog'] = {'command': [sys.executable, '-c', 'import time; time.sleep(30)']}
+        self.start()
+        self.ready()
+        self.admin_ready()
+        wait_for(lambda: self.supervisor.tablet_guard and self.supervisor.tablet_guard.active())
+        self.assertIsNone(self.supervisor.admin.tablet_guard)
+        helper_pid = self.supervisor.tablet_guard.process.pid
+        self.supervisor.stop_event.set()
+        self.thread.join(4)
+        self.assertFalse(self.thread.is_alive())
+        with self.assertRaises(ProcessLookupError): os.kill(helper_pid, 0)
+
     def test_child_death_recovers_same_configuration_without_token_logs(self):
         self.start()
         self.ready()

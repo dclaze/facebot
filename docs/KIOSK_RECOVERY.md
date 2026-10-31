@@ -32,6 +32,16 @@ The token is read from its existing private file on every child launch. It never
 
 The generated plist lives at `~/Library/LaunchAgents/org.facebot.kiosk.plist`; state is `~/Library/Application Support/Facebot/kiosk/`. A custom `--state-dir /absolute/private/path` can precede every command. The shared lock always stays at `~/Library/Application Support/Facebot/kiosk-owner.lock`, so differing release trees/state directories cannot launch competing kiosk supervisors. Never delete this lock to force a takeover.
 
+## Optional USB tablet crash recovery
+
+`--tablet-watchdog` opts into a narrow additional child: it monitors an already-installed Facebot app on exactly one already-authorized, USB-attached Android tablet. The installer uses read-only ADB inventory and rejects missing, unauthorized, multiple or wireless-only devices. It recognizes existing `adb` on PATH/the standard Android SDK path, or accepts `--adb /absolute/path/to/adb`. It does not install platform tools or change USB authorization.
+
+The selected identifier is stored only in private `tablet-watchdog.json`, never in command arguments, the LaunchAgent, general status or logs. The child's only recovery action is to launch `org.facebot/.FaceActivity` when `pidof org.facebot` unambiguously reports no process and the same device is available. A running process means no action—even if the owner exited to another app—so it does not steal foreground focus. It does not install, change settings, unlock/wake the tablet or establish USB reverse tunnels. Voice/vision can continue using Wi-Fi; USB is the explicit recovery control path.
+
+The watchdog persists a maximum of 3 restart attempts per 10 minutes with a 30-second minimum gap. Invalid/unwritable budget state fails closed; replacing the watchdog process does not reset this allowance. Create the private `tablet-watchdog.paused` file in the service state directory to suspend recovery; remove it to resume. For intentional force-stop/app termination, pause the watchdog or stop the service first. Stop/uninstall terminates the helper without stopping the Android app. `tablet_watchdog_active` means the monitoring process is alive, not that the tablet is connected or a recovery was observed.
+
+A USB cable and existing authorization must remain available for this optional recovery path. Without it, Android process-crash recovery still needs separate platform-level observation; a default-home selection alone is not proof. Physical Wi-Fi verification should still include a USB-disconnected observation to exclude an accidental reverse tunnel, then reconnect USB if this watchdog is desired.
+
 ## Observe, stop and remove
 
 ```sh

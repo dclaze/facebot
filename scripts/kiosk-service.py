@@ -9,7 +9,9 @@ from logging.handlers import RotatingFileHandler
 import os
 from pathlib import Path
 import plistlib
+import re
 import signal
+import shutil
 import socket
 import subprocess
 import sys
@@ -63,36 +65,43 @@ def healthy(config):
 
 class SleepGuard:
     """Own one idle-sleep inhibitor; -w also releases it if its parent dies."""
-    def __init__(self, stop_event, logger, command=None):
+    def __init__(self, stop_event, logger, command=None, label='idle_sleep_protection', stop_timeout=2):
         self.stop_event, self.logger = stop_event, logger
         self.command = command or ['/usr/bin/caffeinate', '-i', '-w', str(os.getpid())]
         self.process = None
+        self.label = label
+        self.stop_timeout = stop_timeout
 
     def active(self):
         process = self.process
         return process is not None and process.poll() is None
 
     def run(self):
+        delay = 2
         try:
             while not self.stop_event.is_set():
+                born = time.monotonic()
                 try:
                     self.process = subprocess.Popen(self.command, stdin=subprocess.DEVNULL,
                                                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-                    self.logger.info('idle_sleep_protection_started')
+                    self.logger.info('%s_started', self.label)
                     while not self.stop_event.wait(.5) and self.process.poll() is None:
                         pass
                     if self.process.poll() is not None:
                         self.process.wait()
                 except OSError:
-                    self.logger.warning('idle_sleep_protection_unavailable')
+                    self.logger.warning('%s_unavailable', self.label)
                 if not self.stop_event.is_set():
-                    self.stop_event.wait(2)
+                    if time.monotonic() - born >= 120:
+                        delay = 2
+                    self.stop_event.wait(delay)
+                    delay = min(60, delay * 2)
         finally:
             if self.process is not None:
                 if self.process.poll() is None:
                     self.process.terminate()
                     try:
-                        self.process.wait(timeout=2)
+                        self.process.wait(timeout=self.stop_timeout)
                     except subprocess.TimeoutExpired:
                         self.process.kill()
                         self.process.wait(timeout=2)
@@ -107,6 +116,7 @@ class Supervisor:
         self.restarts = 0
         self.admin = self.admin_thread = None
         self.sleep_guard = self.sleep_thread = None
+        self.tablet_guard = self.tablet_thread = None
         self.logger = logging.getLogger(f'facebot.kiosk.{id(self)}')
         self.logger.setLevel(logging.INFO)
         self.logger.propagate = False
@@ -126,6 +136,8 @@ class Supervisor:
             value['admin']['watchdog_alive'] = self.admin_thread.is_alive()
         if self.sleep_guard is not None:
             value['idle_sleep_protected'] = self.sleep_guard.active()
+        if self.tablet_guard is not None:
+            value['tablet_watchdog_active'] = self.tablet_guard.active()
         atomic_json(self.state / 'status.json', value)
         if phase != 'ready' or fields:
             self.logger.info('%s', json.dumps(value, sort_keys=True))
@@ -168,6 +180,7 @@ class Supervisor:
         if self.config.get('admin'):
             config = {**self.config, **self.config['admin']}
             config.pop('admin', None)
+            config.pop('tablet_watchdog', None)
             config['prevent_sleep'] = False
             self.admin = Supervisor(config, self.state / 'admin', self.state / 'admin-owner.lock')
             self.admin_thread = threading.Thread(target=self.admin.run, name='facebot-admin-watchdog', daemon=True)
@@ -176,6 +189,11 @@ class Supervisor:
             self.sleep_guard = SleepGuard(self.stop_event, self.logger)
             self.sleep_thread = threading.Thread(target=self.sleep_guard.run, name='facebot-sleep-guard', daemon=True)
             self.sleep_thread.start()
+        if self.config.get('tablet_watchdog'):
+            self.tablet_guard = SleepGuard(self.stop_event, self.logger,
+                                          command=self.config['tablet_watchdog']['command'], label='tablet_watchdog', stop_timeout=10)
+            self.tablet_thread = threading.Thread(target=self.tablet_guard.run, name='facebot-tablet-guard', daemon=True)
+            self.tablet_thread.start()
 
     def stop_support(self):
         self.stop_event.set()
@@ -192,6 +210,10 @@ class Supervisor:
             self.sleep_thread.join(5)
             if self.sleep_thread.is_alive():
                 raise TimeoutError('Sleep guard shutdown timed out')
+        if self.tablet_thread is not None:
+            self.tablet_thread.join(13)
+            if self.tablet_thread.is_alive():
+                raise TimeoutError('Tablet watchdog shutdown timed out')
 
     def run(self):
         self.state.mkdir(parents=True, exist_ok=True, mode=0o700)
@@ -341,6 +363,34 @@ def restart_service():
     start_service()
 
 
+def select_usb_tablet(adb_override=None):
+    """Read-only inventory; never put a device identifier in output or argv."""
+    candidates = [Path(adb_override).expanduser()] if adb_override else []
+    if not candidates:
+        located = shutil.which('adb')
+        if located:
+            candidates.append(Path(located))
+        sdk = os.environ.get('ANDROID_HOME') or os.environ.get('ANDROID_SDK_ROOT')
+        if sdk:
+            candidates.append(Path(sdk) / 'platform-tools/adb')
+        candidates.append(Path.home() / 'Library/Android/sdk/platform-tools/adb')
+    adb = next((path.resolve() for path in candidates if path.is_file() and os.access(path, os.X_OK)), None)
+    if adb is None:
+        raise ValueError('An existing Android platform-tools adb is required for tablet monitoring')
+    inventory = subprocess.run([str(adb), 'devices', '-l'], check=True, text=True,
+                               stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, timeout=5).stdout
+    serials = []
+    for line in inventory.splitlines():
+        fields = line.split()
+        if (len(fields) >= 3 and fields[1] == 'device' and re.fullmatch(r'[A-Za-z0-9._-]{1,128}', fields[0])
+                and not fields[0].startswith('emulator-') and any(field.startswith('usb:') for field in fields[2:])):
+            serials.append(fields[0])
+    if len(serials) != 1:
+        raise ValueError('Connect exactly one already-authorized USB tablet; no device was changed')
+    return {'enabled': True, 'adb': str(adb), 'serial': serials[0], 'interval_s': 5,
+            'max_restarts_per_10min': 3}
+
+
 def build_config(args):
     root = Path(args.root).expanduser().resolve()
     python = Path(args.python or root / '.venv/bin/python').expanduser().absolute()
@@ -383,6 +433,10 @@ def build_config(args):
         config['admin'] = dict(role='admin', host=args.host, port=admin_port, command=admin_command)
     elif getattr(args, 'owner_client', []):
         raise ValueError('--owner-client requires owner controls')
+    if getattr(args, 'tablet_watchdog', False):
+        if not (root / 'scripts/tablet-watchdog.py').is_file():
+            raise ValueError('Tablet watchdog script missing from release')
+        config['tablet_watchdog_selection'] = select_usb_tablet(getattr(args, 'adb', None))
     return config
 
 
@@ -398,6 +452,14 @@ def install(args, state):
         raise ValueError('Existing installation; uninstall before replacing its configuration')
     state.mkdir(parents=True, exist_ok=True, mode=0o700)
     os.chmod(state, 0o700)
+    selection = config.pop('tablet_watchdog_selection', None)
+    if selection is not None:
+        selection.update(pause_file=str(state / 'tablet-watchdog.paused'),
+                         state_file=str(state / 'tablet-watchdog-state.json'))
+        private_config = state / 'tablet-watchdog.json'
+        atomic_json(private_config, selection)
+        config['tablet_watchdog'] = {'command': [config['command'][0],
+            str(Path(config['root']) / 'scripts/tablet-watchdog.py'), '--config', str(private_config)]}
     atomic_json(state / 'config.json', config)
     plist = dict(Label=LABEL,
                  ProgramArguments=[sys.executable, str(Path(__file__).resolve()),
@@ -434,6 +496,8 @@ def main():
     setup.add_argument('--admin-port', type=int, default=8766)
     setup.add_argument('--owner-client', action='append', default=[], help='Allow an explicit owner device RFC1918 IP to use controls; repeat if needed')
     setup.add_argument('--no-sleep-protection', action='store_true', help='Do not inhibit idle system sleep while service runs')
+    setup.add_argument('--tablet-watchdog', action='store_true', help='Opt into restarting a missing Facebot process on one already-authorized USB tablet')
+    setup.add_argument('--adb', help='Existing adb executable for optional USB tablet monitoring')
     for action in ('run', 'start', 'stop', 'restart', 'status', 'uninstall'):
         sub.add_parser(action)
     args = parser.parse_args()
