@@ -7,6 +7,7 @@ import numpy as np
 from mlx_audio.tts.utils import load_model
 from pipecat.frames.frames import TTSAudioRawFrame, OutputTransportMessageFrame, InterruptionFrame, TTSStoppedFrame
 from server.visemes import cues
+from server.prepared_audio import PreparedAudioCache
 from server.captions import caption_cues
 from server.spoken_text import spoken_text
 from server.settings import read as read_settings
@@ -43,19 +44,28 @@ class SpeechEngine:
         self.voice = voice
         self.executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix='facebot-tts')
         self.model = None
+        self.prepared_cache = PreparedAudioCache(model)
 
     def synthesize_segments(self, text):
         text = spoken_text(text)
         if not text:
             return
+        # Capture voice/rate for the complete utterance and cache identity.
+        if self.live_settings:
+            self.speed = read_settings()['speech_rate']
+        voice, speed = self.voice, self.speed
+        cached = self.prepared_cache.get(text, voice, speed)
+        if cached is not None:
+            self.last_synthesized_rate = speed
+            for audio, mouth_cues, captions in cached:
+                yield SpeechSegment(audio, mouth_cues, captions)
+            return
         # One worker owns model operations, including generator advancement/close.
         if self.model is None:
             self.model = load_model(self.model_name)
         pipeline = self.model._get_pipeline('a')
-        # UI and command edits affect the next utterance, never mid-utterance audio.
-        if self.live_settings:
-            self.speed = read_settings()['speech_rate']
-        for result in pipeline(text, voice=self.voice, speed=self.speed):
+        complete_segments = []
+        for result in pipeline(text, voice=voice, speed=speed):
             mx.eval(result.audio)
             if self.model.config.sample_rate != 24000:
                 raise ValueError('Expected Kokoro 24 kHz output')
@@ -65,8 +75,12 @@ class SpeechEngine:
             if result.pred_dur is not None:
                 phonemes = [p for p in result.phonemes if self.model.vocab.get(p) is not None]
                 mouth_cues = cues(phonemes, np.asarray(result.pred_dur).tolist(), len(samples))
-            self.last_synthesized_rate = self.speed
-            yield SpeechSegment(audio, mouth_cues, caption_cues(getattr(result, 'graphemes', text), len(samples), getattr(result, 'tokens', None)))
+            self.last_synthesized_rate = speed
+            segment = SpeechSegment(audio, mouth_cues, caption_cues(getattr(result, 'graphemes', text), len(samples), getattr(result, 'tokens', None)))
+            complete_segments.append(segment)
+            yield segment
+        # Only a fully exhausted synthesis is reusable after cancellation.
+        self.prepared_cache.put(text, voice, speed, complete_segments)
 
     def synthesize(self, text, with_cues=False):
         chunks, mouth_cues, sample_offset = [], [], 0

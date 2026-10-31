@@ -14,13 +14,14 @@ from pipecat.frames.frames import (
 )
 from pipecat.processors.frame_processor import FrameProcessor
 
-STOP = re.compile(r"^(?:(?:please|boo)[ ,]+)?(?:stop(?: talking| speaking)?|be quiet|quiet|silence|shut up|leave me alone)(?: please)?[.!?]*$", re.I)
+STOP = re.compile(r"^(?:(?:please|boo)[ ,]+)?(?:stop(?: talking| speaking| laughing| the game| game)?|be quiet|quiet|silence|shut up|leave me alone)(?: please)?[.!?]*$", re.I)
 RESUME = re.compile(r"^(?:please )?(?:you can talk again|talk again|start talking|continue talking|you can speak now)[.!?]*$", re.I)
 
 
 class InteractionState:
     def __init__(self, scene, clock=time.monotonic):
         self.scene, self.clock = scene, clock
+        self.control_epoch = 0
         self.user_speaking = False
         self.bot_speaking = False
         self.response_pending = False
@@ -59,6 +60,7 @@ class VisitorControl(FrameProcessor):
             self.state.scene.encounter.engaged()
             text = frame.text.strip()
             if STOP.fullmatch(text):
+                self.state.control_epoch += 1
                 self.state.scene.encounter.silenced = True
                 self.state.response_pending = False
                 await self.broadcast_frame(InterruptionFrame)

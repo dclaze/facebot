@@ -59,7 +59,7 @@ class ReplyQualityTests(unittest.IsolatedAsyncioTestCase):
         await processor.process_frame(ordinary, FrameDirection.DOWNSTREAM)
         processor.push_frame.assert_awaited_once()
         self.assertEqual(processor.push_frame.call_args.args[0].text, 'One piece per person, please.')
-        other = LLMContextFrame(LLMContext([{'role':'user', 'content':'Tell me a joke.'}]))
+        other = LLMContextFrame(LLMContext([{'role':'user', 'content':'Why is the moon round?'}]))
         await processor.process_frame(other, FrameDirection.DOWNSTREAM)
         self.assertIs(processor.push_frame.call_args.args[0], other)
         state.scene.encounter.silenced = True
