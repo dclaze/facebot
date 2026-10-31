@@ -1,0 +1,100 @@
+{
+  "version": 1,
+  "skills": [
+    {
+      "id": "sound-effects",
+      "name": "Sound effects",
+      "description": "A local soundboard for comic beats, spooky moments and arcade energy.",
+      "examples": [
+        "Play a drumroll",
+        "Make a ghost sound",
+        "Can you fart?"
+      ],
+      "availability": "installed"
+    },
+    {
+      "id": "automatic-reactions",
+      "name": "Automatic sound reactions",
+      "description": "Occasional effects after fitting replies. A 30-second cooldown and conversation spacing keep them occasional.",
+      "examples": [
+        "Tell me a joke",
+        "Stop sound effects",
+        "Turn on sound effects"
+      ],
+      "availability": "installed",
+      "requires_sound_policy": true
+    },
+    {
+      "id": "visual-reactions",
+      "name": "Visual reactions",
+      "description": "Brief remarks about supported, freshly observed items. Requires the connected camera and confirmed labels.",
+      "examples": [
+        "Show the camera a witch hat, cape or crown."
+      ],
+      "availability": "installed",
+      "requires_visual_reactions": true
+    },
+    {
+      "id": "conversation",
+      "name": "Conversation & jokes",
+      "description": "Short local conversations, jokes and character delivery, shaped by your saved directions.",
+      "examples": [
+        "Tell me a joke",
+        "What can you do?"
+      ],
+      "availability": "installed"
+    },
+    {
+      "id": "robin-williams",
+      "name": "Robin Williams performance",
+      "description": "A fictional Robin Williams ghost visit: comedy skit, song introduction, then the lyric music video. Requests for him can be understood by the conversation model.",
+      "examples": [
+        "Is Robin Williams there?",
+        "Can we hear from Robin?",
+        "Bring out the guy from Mrs Doubtfire"
+      ],
+      "availability": "installed",
+      "requires_robin_skit": true
+    },
+    {
+      "id": "scripted-quips",
+      "name": "Halloween quip rotation",
+      "description": "66 prepared lines: welcomes, camera-grounded costume jokes and eight one-candy reminders. Quiet when busy, absent or muted; conversation stays available.",
+      "examples": [
+        "Hey YOU! One candy per person, PLEASE!",
+        "One candy per person. Extra arms do not count.",
+        "A cape! Finally, someone dressed for an entrance."
+      ],
+      "availability": "installed",
+      "requires_quip_pack": true
+    }
+  ],
+  "personalities": [
+    {
+      "id": "ghost",
+      "name": "Snarky ghost",
+      "description": "A theatrical, child-safe ghost with short jokes and a little attitude.",
+      "availability": "installed"
+    },
+    {
+      "id": "host",
+      "name": "Warm host",
+      "description": "A friendly, concise host for a neutral welcome and straightforward conversation.",
+      "availability": "installed"
+    }
+  ],
+  "events": [
+    {
+      "id": "halloween",
+      "name": "Halloween",
+      "description": "Mill Valley Halloween context, candy etiquette and supported costume reactions.",
+      "availability": "installed"
+    },
+    {
+      "id": "neutral",
+      "name": "Everyday welcome",
+      "description": "A clean starting point with no holiday, location or special event assumptions.",
+      "availability": "installed"
+    }
+  ]
+}

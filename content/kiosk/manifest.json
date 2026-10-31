@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "id": "laugh-challenge-cackle-v2",
+  "file": "deep-cackle-v2.wav",
+  "sha256": "0e279764abad3353abf5b3368815aa0dd0ae8429dca998e2d4df50bd67cab32d",
+  "samples": 122783,
+  "sample_rate": 24000,
+  "license": "CC0-1.0",
+  "processing": "Accepted V2: -4.98 semitones, 45Hz highpass, bass body, mild saturation, short room echo; -9dBFS ceiling; exact existing authored WAV bytes."
+}

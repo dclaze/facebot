@@ -1,0 +1,102 @@
+{
+  "version": 1,
+  "experiences": [
+    {
+      "id": "laughing-contest",
+      "name": "Laughing contest",
+      "description": "Invite a laugh-off, let the visitor go first, then answer with a deep monster laugh and glowing eyes.",
+      "version": 3,
+      "availability": "preview",
+      "event_ids": [
+        "halloween"
+      ],
+      "collection": "Halloween interactions",
+      "category": "Game",
+      "contract": "contexts/skills/LAUGHING_CONTEST.md",
+      "trigger": "An engaged visitor agrees to a laughing contest.",
+      "review_summary": "Deeper laugh accepted; eyes now stay for the complete recording. Final preview awaits review.",
+      "examples": [
+        "Want to try a laughing contest?"
+      ],
+      "assets": {
+        "video": {
+          "path": "content/experiences/laughing-contest/v3/demo.mp4",
+          "sha256": "50d1309a30b00897c3cc6b06961ccde89dc7d1519074d3ad269b11c595624b14"
+        },
+        "audio": {
+          "path": "content/experiences/laughing-contest/v3/laugh.wav",
+          "sha256": "0e279764abad3353abf5b3368815aa0dd0ae8429dca998e2d4df50bd67cab32d"
+        },
+        "poster": {
+          "path": "content/experiences/laughing-contest/v3/poster.png",
+          "sha256": "ea6c5ee0c1f251ec411e2f7f0fc63cea15386a444d3624b8382f8846ef2a8575"
+        }
+      }
+    },
+    {
+      "id": "costume-dad-joke",
+      "name": "Costume dad jokes",
+      "description": "One short, cheeky joke that actually fits the visitor’s costume.",
+      "version": 1,
+      "availability": "draft",
+      "event_ids": [
+        "halloween"
+      ],
+      "collection": "Halloween interactions",
+      "category": "Comedy",
+      "contract": "contexts/skills/COSTUME_DAD_JOKE.md",
+      "trigger": "The visitor states their costume, or a supported observation is confirmed.",
+      "review_summary": "Behavior contract; a demonstration is next.",
+      "examples": [
+        "I’m a bat."
+      ],
+      "context_keywords": [
+        "costume",
+        "dressed as"
+      ]
+    },
+    {
+      "id": "situational-wit",
+      "name": "Situational wit",
+      "description": "Quick, self-contained comebacks about what is happening right now.",
+      "version": 1,
+      "availability": "draft",
+      "event_ids": [
+        "halloween"
+      ],
+      "collection": "Halloween interactions",
+      "category": "Comedy",
+      "contract": "contexts/skills/SITUATIONAL_WIT.md",
+      "trigger": "A visitor explicitly describes the situation or a supported event is grounded.",
+      "review_summary": "Behavior contract; timing and delivery need a preview.",
+      "examples": [
+        "I’m testing your eyes."
+      ],
+      "context_keywords": [
+        "testing your eyes",
+        "testing my eyes"
+      ]
+    },
+    {
+      "id": "dog-sidekick",
+      "name": "Dog sidekick",
+      "description": "A cheeky greeting when a visitor arrives with a dog.",
+      "version": 1,
+      "availability": "draft",
+      "event_ids": [
+        "halloween"
+      ],
+      "collection": "Halloween interactions",
+      "category": "Reaction",
+      "contract": "content/halloween/dog-interaction.json",
+      "trigger": "A fresh confirmed dog observation, or explicit spoken context.",
+      "review_summary": "Reviewed lines exist; a concise voiced demo is next.",
+      "examples": [
+        "I brought my dog."
+      ],
+      "context_keywords": [
+        "dog"
+      ]
+    }
+  ]
+}

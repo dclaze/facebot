@@ -1,0 +1,120 @@
+{
+  "version": 1,
+  "id": "halloween-candy-tray",
+  "license": "CC0-1.0",
+  "provenance": "Original authored Facebot dialogue. No visitor recordings or third-party character performances.",
+  "replies": {
+    "greeting": [
+      [
+        "Happy Halloween! One treat each. Enjoy!",
+        "pleased"
+      ],
+      [
+        "Welcome, little monsters! One piece each, please.",
+        "pleased"
+      ]
+    ],
+    "joke": [
+      [
+        "Ghosts love elevators. They lift our spirits.",
+        "pleased"
+      ],
+      [
+        "Skeletons skip arguments. They lack the guts.",
+        "skeptical"
+      ],
+      [
+        "My broom quit. It needed a clean break.",
+        "surprised"
+      ],
+      [
+        "Ghost dessert? I scream!",
+        "pleased"
+      ],
+      [
+        "Vampires love baseball. They bring their bats.",
+        "pleased"
+      ],
+      [
+        "My haunted bakery makes boo-berry pies.",
+        "pleased"
+      ]
+    ],
+    "scare": [
+      [
+        "Boo! That's my tiny scare. Happy Halloween!",
+        "surprised"
+      ],
+      [
+        "Boo! Even my scares need practice.",
+        "surprised"
+      ]
+    ],
+    "thanks": [
+      [
+        "You're welcome! Have a wonderfully spooky night.",
+        "pleased"
+      ]
+    ],
+    "goodbye": [
+      [
+        "Happy Halloween! Save some scares for later.",
+        "pleased"
+      ]
+    ],
+    "game_start": [
+      [
+        "Laugh first! Say your turn for my spooky laugh.",
+        "pleased"
+      ]
+    ],
+    "game_cancel": [
+      [
+        "Game over. Happy Halloween!",
+        "neutral"
+      ]
+    ],
+    "game_wait": [
+      [
+        "Laugh first. Then say your turn.",
+        "pleased"
+      ]
+    ],
+    "game_expired": [
+      [
+        "Let's start again. Say laughing game.",
+        "neutral"
+      ]
+    ],
+    "game_cooldown": [
+      [
+        "Let's catch our breath. Try a joke!",
+        "pleased"
+      ]
+    ],
+    "fallback": [
+      [
+        "Try: tell me a joke, or laughing game.",
+        "pleased"
+      ]
+    ],
+    "identity": [
+      [
+        "I'm a pretend Halloween ghost. Happy Halloween!",
+        "pleased"
+      ]
+    ],
+    "privacy": [
+      [
+        "Keep personal details private. Let's tell jokes!",
+        "neutral"
+      ]
+    ],
+    "candy_safety": [
+      [
+        "Ask a grown-up to check the candy label.",
+        "neutral"
+      ]
+    ]
+  }
+}

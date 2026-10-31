@@ -1,0 +1,51 @@
+{
+  "version": 1,
+  "cooldown_seconds": 30,
+  "minimum_reply_gap": 3,
+  "joke_effect": "rimshot",
+  "reply_rules": [
+    {
+      "phrases": [
+        "qualified management",
+        "witch hat"
+      ],
+      "effect": "ghost_laugh"
+    },
+    {
+      "phrases": [
+        "costs extra",
+        "pay me",
+        "my invoice"
+      ],
+      "effect": "coin"
+    },
+    {
+      "phrases": [
+        "who authorized new management",
+        "a crown"
+      ],
+      "effect": "bell"
+    },
+    {
+      "phrases": [
+        "night shift starts now",
+        "finally someone with structure"
+      ],
+      "effect": "rimshot"
+    },
+    {
+      "phrases": [
+        "dramatic entrance",
+        "brought their management team"
+      ],
+      "effect": "boing"
+    },
+    {
+      "phrases": [
+        "out of this world",
+        "robot takeover"
+      ],
+      "effect": "laser"
+    }
+  ]
+}

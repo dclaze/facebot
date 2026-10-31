@@ -1,3 +1,33 @@
+# Halloween launch and recognition diagnostics — 2026-10-31 UTC
+
+Public artifact milestone **DELIVERED**: [0.2.3 prerelease APK, source and setup guide](https://github.com/dclaze/facebot/releases/tag/v0.2.3-halloween-alpha), exact release source `30a7397`. The installed signed APK is unchanged. Full kiosk acceptance remains **NOT DELIVERED**.
+
+Post-release host diagnostics now separate STT preparation, worker queue, recognizer call and result-selection time without retaining audio or text. The current runtime includes `1796e17`; first controlled readings were 471/140/664 ms inside the recognizer, with queue time below 1 ms. These observations do not reproduce or resolve earlier 4–6 second stalls. A same-process 120-second idle probe reproduced 4509 ms inside recognition with queue time below 1 ms; a later idle greeting was 251 ms and a later Hello 350 ms, so idle time alone is not a sufficient cause. Authenticated diagnostics retain the latest 16 timing receipts. The readiness command includes both transcription quality and timing regression tests.
+
+A separately signed, isolated AEC3 lab build passed independent source/native/package review and one actual controlled tablet trial: all three authored phrases (stop, Hello, trick-or-treat) recognized exactly with no extra recognized questions. This does not establish general speech coverage, full-scale limiter behavior or the 250 ms acoustic interruption target. Native stop timing straddles that bound under one onset definition, and overlapping speech/natural gaps prevent a precise acoustic cutoff claim. A second longer actual trial exposed an early unprompted speech start that stopped the performance, plus an extra accepted utterance after a reply; source/audio attribution is under review. Its intended acoustic-stop window was therefore invalid. The public app retains its tested Lenovo half-duplex behavior; no AEC prototype was promoted.
+
+Actual active/idle/restored frames were visually inspected by two reviewers. Settled production presentation is immersive with legible controls and captions. The private 12-hour observers continue, but deliberate lab and host-restart intervals are explicitly recorded: the mixed-runtime stream must not be called uninterrupted public-build endurance. Owner screen lock, final stand/power arrangement, generated audible latency and full-duration acceptance remain open. Exact runtime ownership, process handles and private receipts are in canonical `/Users/mv_server/Development/facebot/STATUS.md`.
+
+The following candidate checkpoint is historical; publication completed afterward.
+
+---
+
+# Halloween 0.2.3 candidate checkpoint — 2026-10-31 UTC
+
+Public distribution scope remains a signed Android APK, Apple Silicon Mac setup guide and free bundled skill packs. Public assets exclude pairing credentials, visitor media and the personal guest performance. Published release is currently v0.2.2-halloween-alpha; the verified 0.2.3 candidate below is being prepared for publication.
+
+The candidate adds thermal-status workload adaptation, bounded recovery of unresponsive demanded TTS work, a read-only Android resource observer, and state-specific visitor guidance. Severe thermal status reduces MLKit attention admission and scheduled face redraw work while preserving independent scene snapshots. Speech-worker recovery requires continuous connected, unmuted demand and unchanged executing work for the default90-second observation deadline. Idle, Quiet, disconnected and progressing work are excluded; this does not detect every possible pipeline stall.
+
+The integrated aggregate passed46 software checks with no failures; six physical receipt categories remain missing for the exact release source. Those checks include actual blocked-thread cancellation and disposable-child recovery fixtures, plus native thermal/frame ownership tests. A deployed host voice-child SIGKILL recovered voice and fresh vision in15.586seconds while preserving the admin process. That physical drill is process recovery, not an induced native inference hang.
+
+The first thermal APK was installed and inspected on the connected Lenovo. All16 scripted Wi-Fi playback probes completed with60/60 connected, fresh-camera samples and zero reported health errors. Dispatch-to-native acknowledgement was median68.2ms/p95143.2ms, excluding recognition and acoustic output. Actual cackle/video/Quiet/resume screenshots were visually reviewed; controls and video title do not overlap. Returning from Android Settings restored voice plus fresh vision in5.086seconds. Lenovo's Smart Navigation floating overlay was disabled through its actual Settings switch and the clean screen was inspected; the prior switch state is retained in private restoration notes. The final idle-guidance APK passed its focused native test and independent static review, was installed with the preserved signing key, and its actual idle/active/Quiet/resumed frames were inspected. Two additional microphone trials accepted greeting and joke; first greeting recognition after reconnect remained slow (5.462seconds from synthetic speaker-process exit to observed acceptance versus1.269seconds for the joke). Stage evidence shows first-turn STT alone around4.7–5.2seconds, so fast dispatch acknowledgments must not be used as visitor response latency.
+
+The600-second after-observation completed10samples with zero observed process changes/absence and a maximum60.111-second sample gap. Battery temperature peaked34°C and thermal status remained3 in every sample. The run included intentionally varied rehearsal and Settings workloads, so it does not establish a causal temperature or CPU reduction. Battery level fell55→54percent despite USB power. The manual display brightness was reduced from253 to180/255 with its previous value saved for restoration; physical luminance and adequate event power remain unverified. No complete12-hour observation has elapsed. The Android compatibility path remains half duplex on the affected Lenovo; use touch Quiet to stop playback. Experimental software AEC remains excluded from public artifacts.
+
+Overall product NOT DELIVERED against full acceptance: twelve-hour endurance, generated audible response median200ms/p95500ms, spoken interruption on the affected Lenovo, and intended owner-lock/mount setup remain unmet or unverified. This is an experimental self-hosted prerelease, not external certification or unattended-operation acceptance. The canonical project STATUS handoff contains exact private runtime ownership and evidence locations. Historical checkpoints follow.
+
+---
+
 # Facebot status
 
 Updated: 2026-10-25 (America/Los_Angeles)

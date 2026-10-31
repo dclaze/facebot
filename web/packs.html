@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Facebot · Skills & personalities</title>
+<style>
+:root{color-scheme:dark;--mint:#b8f5cf;--muted:#a2aaa5;--line:#35463b}*{box-sizing:border-box}body{margin:0;background:#111814;color:#f1f5ed;font:16px/1.55 -apple-system,BlinkMacSystemFont,sans-serif}main{max-width:1100px;margin:38px auto;padding:0 28px}a{color:var(--mint)}nav{display:flex;gap:24px;margin-bottom:40px}nav a{text-decoration:none}nav a[aria-current]{border-bottom:2px solid var(--mint)}.eyebrow{font-size:12px;letter-spacing:.15em;text-transform:uppercase;color:var(--mint)}h1{font:58px/1.05 Georgia,serif;margin:14px 0}h2{font:30px Georgia,serif;margin:36px 0 18px}h3{font:25px Georgia,serif;margin:12px 0}p{color:var(--muted)}header{display:grid;grid-template-columns:1fr auto;gap:30px;align-items:center;border-bottom:1px solid var(--line);padding-bottom:24px}.live{max-width:260px;padding:18px;border:1px solid var(--line);border-radius:12px}.live strong{display:block;color:var(--mint)}.filters{display:flex;gap:10px;flex-wrap:wrap;margin:28px 0}button{background:#1a271f;color:var(--mint);border:1px solid #536657;border-radius:7px;font:inherit;padding:9px 15px;cursor:pointer}button[aria-pressed=true]{background:var(--mint);color:#132218}button:hover{border-color:var(--mint)}button:focus-visible,a:focus-visible{outline:2px solid var(--mint);outline-offset:4px}.cards{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px}.card{border:1px solid var(--line);border-radius:13px;padding:24px;background:#172019}.card p{margin:10px 0}.tag{display:inline-block;font-size:12px;padding:3px 9px;border-radius:20px;border:1px solid #536657;color:var(--mint)}.kind{font-size:11px;letter-spacing:.13em;text-transform:uppercase;color:var(--muted);float:right}.example{font-size:14px;color:#d9e6d9;display:block;margin:6px 0}.hint{font-size:13px;color:var(--muted)}#notice{min-height:25px}.samples{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}.sample{background:#172019;border-radius:8px;padding:14px}.sample strong{display:block;font-size:15px;margin-bottom:9px}.sample button{font-size:13px;padding:6px 9px;margin:0 4px 5px 0}.player{position:sticky;bottom:12px;margin-top:20px;padding:16px;background:#203126;border:1px solid #536657;border-radius:12px;box-shadow:0 6px 35px #0006}.player audio{width:100%;height:38px;margin-top:8px}.future{margin-top:38px;padding:24px;border:1px dashed #536657;border-radius:12px}.future h2{margin:8px 0}footer{margin:32px 0;border-top:1px solid var(--line);padding-top:20px;color:var(--muted);font-size:13px}[hidden]{display:none!important}@media(max-width:750px){h1{font-size:43px}header{grid-template-columns:1fr}.live{max-width:none}.cards{grid-template-columns:1fr}.samples{grid-template-columns:repeat(2,minmax(0,1fr))}main{padding:0 18px}.kind{float:none;display:block;margin-top:8px}}@media(prefers-reduced-motion:no-preference){button{transition:background .15s}}
+.experiencePoster{width:100%;aspect-ratio:3/2;object-fit:cover;border-radius:8px;margin:12px 0}.card button{margin-top:10px}#experiences{margin:36px 0 50px}dialog{color:#f1f5ed;background:#172019;border:1px solid #536657;border-radius:16px;padding:28px;width:min(850px,94vw);max-height:92vh;overflow:auto}dialog::backdrop{background:#000b}dialog video{display:block;width:100%;max-height:48vh;background:#000;border-radius:8px;margin:20px 0}dialog textarea{display:block;width:100%;background:#101813;color:#f1f5ed;border:1px solid #536657;border-radius:8px;padding:12px;font:inherit;margin:10px 0}.reviewActions{display:flex;gap:12px;flex-wrap:wrap}.closeReview{float:right}#approvePreview{background:var(--mint);color:#132218}#workshopCounts{color:var(--mint)}button:disabled{opacity:.5;cursor:wait}</style></head><body><main>
+<nav aria-label="Owner controls"><a href="/">Control room</a><a href="/packs" aria-current="page">Skills & personalities</a></nav>
+<header><div><div class="eyebrow">Facebot / Your collection</div><h1>A character.<br>A few good tricks.</h1><p>Explore installed skills and the next ideas taking shape.<br>Watch a preview, leave feedback, and build your collection.</p></div><div class="live"><span class="eyebrow">On your bot</span><strong id="live">Checking connection…</strong><span class="hint" id="liveDetail">Loading your collection.</span></div></header>
+<section id="experiences" aria-labelledby="experienceHeading">
+<div class="eyebrow">In the workshop · Building toward October 31</div>
+<h2 id="experienceHeading">Watch it. Shape it. Make it yours.</h2>
+<p>Try a complete interaction, tell us what lands, and send the next version in a better direction.</p>
+<p id="workshopCounts" class="hint"></p><p id="workshopSchedule" class="hint"></p><p id="workshopStatus" role="status" class="hint">Loading the workshop…</p>
+<div id="experienceCards" class="cards"></div>
+</section>
+<dialog id="experienceReview" aria-labelledby="reviewTitle">
+<button id="closeReview" class="closeReview" aria-label="Close preview">Close</button>
+<h2 id="reviewTitle"></h2><p id="reviewDescription"></p>
+<video id="experienceVideo" controls playsinline preload="metadata" hidden></video>
+<label for="reviewNote">What should the next version do?</label>
+<textarea id="reviewNote" maxlength="2000" rows="4" placeholder="More scary, hold the eyes longer, shorten the setup…"></textarea>
+<div class="reviewActions"><button id="requestRevision">Request revision</button><button id="approvePreview">Approve this preview</button></div>
+<p id="reviewStatus" role="status" aria-live="polite" class="hint"></p>
+</dialog>
+<h2>Installed collection</h2>
+<div class="filters" aria-label="Filter collection"><button aria-pressed="true" data-filter="all">Everything</button><button aria-pressed="false" data-filter="skills">Skills</button><button aria-pressed="false" data-filter="personalities">Personalities</button><button aria-pressed="false" data-filter="events">Event packs</button></div>
+<p id="notice" role="status" aria-live="polite"></p><div id="collection" class="cards"></div>
+<section id="soundSection"><h2>Hear the sound collection</h2><p id="soundCount"></p><p class="hint">Previews play on this device. To hear the bot, say “Play a drumroll”. For an automatic sting, say “Tell me a joke” and let it finish. Automatic effects wait at least 30 seconds and several replies between uses.</p><div id="samples" class="samples"></div><div class="player" id="playerBox" hidden><strong id="playing"></strong><audio id="player" controls preload="none"></audio><button id="closePlayer">Close preview</button></div></section>
+<aside class="future"><div class="eyebrow">Future store · concept</div><h2>More personality, by the pack.</h2><p>Future paid packs could bundle a personality, event material, sounds and reactions. This installed collection is the starting point; pricing and purchases are not available yet.</p></aside>
+<footer>Installed personalities are paired with event profiles. Changing profiles currently requires a server reload; browsing or previewing here does not change your bot.</footer>
+</main><script>
+const $=id=>document.getElementById(id);let catalog=null,filter='all',liveProfile=null,liveReady=false;
+function element(tag,text,cls){const n=document.createElement(tag);if(text)n.textContent=text;if(cls)n.className=cls;return n}
+function render(){if(!catalog)return;$('collection').replaceChildren();for(const kind of ['skills','personalities','events']){if(filter!=='all'&&filter!==kind)continue;for(const item of catalog[kind]){const card=element('article',null,'card');let active=false;if(liveReady){if(kind==='events')active=item.id===liveProfile;else if(kind==='personalities')active=item.event_ids.includes(liveProfile);else active=liveProfile===catalog.configured_profile&&item.configured;}card.append(element('span',active?'Active profile · installed':'Installed','tag'),element('span',kind==='events'?'Event pack':kind==='personalities'?'Personality':'Skill','kind'),element('h3',item.name),element('p',item.description));for(const phrase of item.examples||[])card.append(element('span',phrase.startsWith('Show')?phrase:'“'+phrase+'”','example'));if(kind==='skills'&&!item.configured)card.append(element('p','Not enabled in this event profile.','hint'));if(kind==='personalities')card.append(element('p','Included in: '+item.event_ids.map(id=>catalog.events.find(e=>e.id===id).name).join(', '),'hint'));$('collection').append(card);}}$('soundSection').hidden=!['all','skills'].includes(filter)}
+async function refresh(){try{const r=await fetch('/api/status',{signal:AbortSignal.timeout(6000)});if(!r.ok)throw Error();const d=await r.json();liveReady=d.voice?.status==='ready';liveProfile=liveReady?d.voice.profile:null;const event=catalog?.events.find(e=>e.id===liveProfile);const character=catalog?.personalities.find(p=>p.event_ids.includes(liveProfile));$('live').textContent=liveReady?(character?.name||liveProfile)+' · '+(event?.name||liveProfile):'Voice server unavailable';$('liveDetail').textContent=liveReady?(d.voice.occupied?'Tablet connected':'Waiting for tablet')+' · '+(d.voice.sound_effects?.automatic?'Automatic reactions configured':'Direct sounds available'):'Installed collection remains available.';render()}catch{liveReady=false;$('live').textContent='Connection unavailable';$('liveDetail').textContent='Showing installed packs.';render()}finally{setTimeout(refresh,5000)}}
+async function load(){try{const r=await fetch('/api/catalog');if(!r.ok)throw Error('Could not load collection.');catalog=await r.json();render();$('soundCount').textContent=catalog.sounds.length+' effects · '+catalog.clip_count+' variations · downloaded creator assets';for(const sound of catalog.sounds){const box=element('div',null,'sample');box.append(element('strong',sound.name));sound.clips.forEach((clip,i)=>{const b=element('button','▶ '+(i+1));b.setAttribute('aria-label','Preview '+sound.name+', variation '+(i+1));b.onclick=async()=>{$('player').pause();$('player').src=clip.url;$('playerBox').hidden=false;$('playing').textContent=sound.name+' · variation '+(i+1);try{await $('player').play();$('notice').textContent='Preview playing on this device.'}catch{$('notice').textContent='Use the audio player to start the preview.'}};box.append(b)});const source=sound.clips[0];if(source.source){const credit=element('a',source.author+' · '+source.license,'hint');credit.href=source.source;credit.target='_blank';credit.rel='noopener';credit.style.display='block';box.append(credit)}$('samples').append(box)}$('notice').textContent=[...catalog.skills,...catalog.personalities,...catalog.events].length+' installed skills and packs. Pick a category to explore.';refresh()}catch(e){$('notice').textContent=e.message+' Reload this page to retry.'}}
+for(const b of document.querySelectorAll('[data-filter]'))b.onclick=()=>{filter=b.dataset.filter;for(const other of document.querySelectorAll('[data-filter]'))other.setAttribute('aria-pressed',String(other===b));render()};$('closePlayer').onclick=()=>{$('player').pause();$('playerBox').hidden=true;$('notice').textContent='Preview closed.';};$('player').onended=()=>{$('notice').textContent='Preview finished.';};load();
+
+let experienceData=null,selectedExperience=null;
+const reviewLabel=x=>x.review?.status==='approved'?'Preview approved':x.review?.status==='changes_requested'?'Changes requested':x.preview_available?'Ready for review':'Draft';
+function renderExperiences(){
+ if(!experienceData)return;
+ $('experienceCards').replaceChildren();
+ for(const item of experienceData.experiences){
+  const card=element('article',null,'card');
+  card.append(element('span',reviewLabel(item),'tag'),element('span',item.category+' · v'+item.version,'kind'),element('h3',item.name),element('p',item.description));
+  if(item.media.poster){const img=document.createElement('img');img.src=item.media.poster;img.alt=item.name+' preview';img.className='experiencePoster';img.loading='lazy';card.append(img);}
+  card.append(element('p',item.review_summary||item.trigger,'hint'));
+  const b=element('button',item.preview_available?'Watch & give feedback':'Leave direction');b.onclick=()=>openExperience(item.id);card.append(b);
+  card.append(element('p',item.collection+' · Preview only','hint'));$('experienceCards').append(card);
+ }
+ const w=experienceData.workshop,a=w.automation;
+ $('workshopSchedule').textContent=w.schedule?.enabled?'Feedback checked every 2 seconds; one revision at a time. Extra draft pass: 9 AM Pacific, October 26–31.':'Automatic draft schedule is being prepared.';
+ $('workshopCounts').textContent=w.ready_for_review+' ready for review · '+w.approved_previews+' approved · '+w.queue.length+' in the workshop';
+ $('workshopStatus').textContent=a.message||'Draft improvements will appear here. Feedback moves to the front of the queue.';
+}
+async function loadExperiences(){
+ const r=await fetch('/api/experiences');if(!r.ok)throw Error('Could not load experience previews.');
+ experienceData=await r.json();renderExperiences();
+}
+function openExperience(id){
+ $('player').pause();
+ selectedExperience=experienceData.experiences.find(x=>x.id===id);
+ const x=selectedExperience;$('reviewTitle').textContent=x.name+' · v'+x.version;
+ $('reviewDescription').textContent=x.description;$('reviewStatus').textContent=reviewLabel(x)+'. Approval applies to this preview, not the live bot.';
+ $('experienceVideo').pause();$('experienceVideo').removeAttribute('src');$('experienceVideo').hidden=!x.preview_available;
+ if(x.preview_available){$('experienceVideo').src=x.media.video;if(x.media.poster)$('experienceVideo').poster=x.media.poster;$('experienceVideo').load();}
+ $('reviewNote').value=x.review?.note||x.previous_feedback||'';
+ $('approvePreview').hidden=!x.preview_available;
+ $('experienceReview').showModal();
+}
+async function submitReview(action){
+ if(!selectedExperience)return;
+ const x=selectedExperience,note=$('reviewNote').value;
+ if(action==='request_changes'&&!note.trim()){$('reviewStatus').textContent='Tell me what you want changed.';$('reviewNote').focus();return}
+ $('requestRevision').disabled=$('approvePreview').disabled=true;
+ try{
+  const r=await fetch('/api/experiences/'+x.id+'/review',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action,note,revision_key:x.revision_key,review_revision:x.review_revision})});
+  const result=await r.json();if(!r.ok)throw Error(result.detail||'Could not save feedback.');
+  await loadExperiences();selectedExperience=experienceData.experiences.find(e=>e.id===x.id);
+  $('reviewStatus').textContent=action==='approve_preview'?'Preview approved. Live activation remains a separate step.':'Feedback saved. The workshop checks it within 2 seconds; revisions run one at a time. Custom choreography may need authoring.';
+ }catch(e){$('reviewStatus').textContent=e.message}
+ finally{$('requestRevision').disabled=$('approvePreview').disabled=false;}
+}
+$('closeReview').onclick=()=>$('experienceReview').close();
+$('experienceReview').addEventListener('close',()=>$('experienceVideo').pause());
+$('requestRevision').onclick=()=>submitReview('request_changes');
+$('approvePreview').onclick=()=>submitReview('approve_preview');
+loadExperiences().catch(e=>$('workshopStatus').textContent=e.message);
+setInterval(async()=>{try{await loadExperiences();if($('experienceReview').open&&selectedExperience){const latest=experienceData.experiences.find(x=>x.id===selectedExperience.id),job=experienceData.workshop.automation;if(latest&&latest.revision_key!==selectedExperience.revision_key){$('reviewStatus').textContent='A new preview is ready. Close and reopen this experience to review it.';}else if(job.skill_id===selectedExperience.id&&['working','needs_author','needs_attention'].includes(job.state)){$('reviewStatus').textContent=job.message;}}}catch{}},3000);
+</script></body></html>

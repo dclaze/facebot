@@ -1,0 +1,21 @@
+{
+  "title": "Dog Sidekick",
+  "summary": "Visitor arrives with a dog. Bot playfully assigns them poop duty, threatening to haunt the sidewalk if they don't bring a bag.",
+  "trigger": "A fresh confirmed dog observation, or explicit spoken context.",
+  "lines": [
+    {
+      "actor": "visitor",
+      "text": "Oh, hi! This is Max. He's very well behaved today."
+    },
+    {
+      "actor": "bot",
+      "text": "A dog! Whoever's on poop duty, bring a bag."
+    },
+    {
+      "actor": "bot",
+      "text": "I haunt this sidewalk. I don't clean it."
+    }
+  ],
+  "sound_id": "none",
+  "rationale": "Grounds the scene in visitor words to avoid visual invention. The comic reversal comes from the bot immediately pivoting from a greeting to a cheeky cleanup threat, fulfilling the intent without accusing the visitor of actual littering."
+}

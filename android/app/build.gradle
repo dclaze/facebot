@@ -1,13 +1,33 @@
 plugins { id 'com.android.application' }
 android {
     namespace 'org.facebot'
+    // Public artifacts contain no developer config, pairing token or private media.
+    sourceSets {
+        main.assets.srcDirs = []
+        debug.assets.srcDirs = ['src/debug/assets']
+        release.assets.srcDirs = []
+    }
+    signingConfigs {
+        publicRelease {
+            def signingFile = System.getenv('FACEBOT_KEYSTORE')
+            if (signingFile) {
+                storeFile file(signingFile)
+                storePassword System.getenv('FACEBOT_KEYSTORE_PASSWORD')
+                keyAlias 'facebot'
+                keyPassword System.getenv('FACEBOT_KEYSTORE_PASSWORD')
+            }
+        }
+    }
+    buildTypes {
+        release { signingConfig signingConfigs.publicRelease }
+    }
     compileSdk 36
     defaultConfig {
         applicationId 'org.facebot'
         minSdk 26
         targetSdk 36
-        versionCode 1
-        versionName '0.1.0'
+        versionCode 4
+        versionName '0.2.3-alpha'
     }
 }
 dependencies { implementation 'com.squareup.okhttp3:okhttp:4.12.0' }

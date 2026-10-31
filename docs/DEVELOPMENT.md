@@ -43,7 +43,7 @@ than accumulating stale speech. Normal server pacing uses 40 ms frames. Run
 ## Android feedback preview
 
 The development client reads the ignored asset
-`android/app/src/main/assets/local-config.json`: JSON fields `url`, `token`, and
+`android/app/src/debug/assets/local-config.json`: JSON fields `url`, `token`, and
 optional `name`. For USB reverse use `ws://127.0.0.1:8765/voice` and the server's
 local pairing token. Build after creating the asset. Never publish this asset or
 the paired APK. LAN connections require trusted TLS instead.

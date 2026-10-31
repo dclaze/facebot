@@ -43,4 +43,14 @@ class HearingTests(unittest.IsolatedAsyncioTestCase):
         self.assertIsInstance(p.push_frame.call_args.args[0],TTSSpeakFrame)
         frame=LLMContextFrame(LLMContext([{'role':'user','content':'Hey Boo do you hear me?'}]))
         await p.process_frame(frame,FrameDirection.DOWNSTREAM)
+        self.assertIsInstance(p.push_frame.call_args.args[0],TTSSpeakFrame)
+
+    async def test_profile_alias_survives_startup_rename_without_wake_gating(self):
+        p=HearingRepair('Doug', aliases=('Boo',));p.push_frame=AsyncMock()
+        for text in ('Hey Bo you there?', 'Are you there?'):
+            frame=LLMContextFrame(LLMContext([{'role':'user','content':text}]))
+            await p.process_frame(frame,FrameDirection.DOWNSTREAM)
+            self.assertIsInstance(p.push_frame.call_args.args[0],TTSSpeakFrame)
+        frame=LLMContextFrame(LLMContext([{'role':'user','content':'What is a ghost?'}]))
+        await p.process_frame(frame,FrameDirection.DOWNSTREAM)
         self.assertIs(p.push_frame.call_args.args[0],frame)
