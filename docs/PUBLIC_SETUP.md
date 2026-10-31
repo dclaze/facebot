@@ -51,7 +51,7 @@ If you want the Mac to recover an actual Android process crash, `--tablet-watchd
 
 In the tablet's owner connection screen, use `ws://192.168.1.50:8765/voice` with the Mac's private pairing token and explicitly enable the trusted-LAN option. Trusted LAN is unencrypted and appropriate only on an owner-controlled private network. For other networks use a properly trusted TLS setup rather than weakening hostname/certificate validation. Do not send tokens through public chat, pastebins or release issues.
 
-Allow microphone and camera access when Android requests them, then check a real spoken request and owner mute/exit. Disconnect USB during a Wi-Fi test so an existing USB reverse tunnel cannot masquerade as wireless success. Confirm the tablet reconnects after an authorized server restart. Do not assume an HTTP health response proves audible speech.
+Allow microphone and camera access when Android requests them, then check a real spoken request and owner mute/exit. Establish Wi-Fi transport independently: either disconnect USB, or verify no ADB reverse mapping exists and the tablet's configured voice endpoint is the Mac's explicit RFC1918 IPv4 address. USB can remain connected for power and the optional recovery watchdog. A loopback endpoint or an unplugged cable alone does not establish successful Wi-Fi operation. Confirm the tablet reconnects after an authorized server restart and that both voice and vision connect. Do not assume an HTTP health response proves audible speech.
 
 The service is optional: `scripts/kiosk-service.py run` is its foreground supervisor command **after** an installation has created private configuration. For a first-time manual run without installing a service, use the following from the source checkout; the token is read in-process and never placed in command arguments:
 
@@ -105,7 +105,7 @@ Physical evidence receipts are deliberately separate from test/replay files. Sup
   "measured_at": "2026-10-31T02:30:00+00:00",
   "scope": "Actual mounted Android and Mac on the intended private Wi-Fi",
   "artifacts": [{"path": "wifi-observation.json", "sha256": "ACTUAL_64_CHARACTER_SHA256"}],
-  "metrics": {"usb_disconnected": true, "tablet_reconnected": true, "voice_and_vision_connected": true}
+  "metrics": {"usb_reverse_absent": true, "voice_endpoint_host": "192.168.1.50", "tablet_reconnected": true, "voice_and_vision_connected": true}
 }
 ```
 
@@ -114,7 +114,7 @@ Relative artifact paths resolve against the receipt directory. Do not copy the e
 | Receipt kind | Required observations |
 | --- | --- |
 | `device` | `voice_and_vision_connected`, `audible_response_verified`, `owner_mute_verified`, `owner_exit_verified`, all true |
-| `wifi` | `usb_disconnected`, `tablet_reconnected`, `voice_and_vision_connected`, all true |
+| `wifi` | `tablet_reconnected` and `voice_and_vision_connected`, both true; additionally either `usb_disconnected` true, or `usb_reverse_absent` true plus `voice_endpoint_host` containing the actual plain RFC1918 IPv4 address. Any supplied endpoint must be RFC1918, even for an unplugged test. |
 | `recovery` | `child_restart_verified`, `supervisor_restart_verified`, `tablet_reconnected`, `settings_preserved`, all true |
 | `visual` | `desktop_reviewed`, `mobile_reviewed`, `tablet_reviewed`, `readable`, `no_clipping`, `controls_verified`, all true |
 | `endurance` | `duration_hours` at least 12 and integer `unexpected_failures` zero |

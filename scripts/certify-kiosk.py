@@ -3,6 +3,7 @@
 import argparse
 from datetime import datetime, timezone
 import hashlib
+import ipaddress
 import json
 import math
 import os
@@ -16,13 +17,13 @@ import time
 import zipfile
 
 ROOT = Path(__file__).resolve().parents[1]
-CORE_TESTS = ('test_kiosk_experiences.py', 'test_skill_store.py', 'test_kiosk_transport.py', 'test_kiosk_service.py', 'test_kiosk_tools.py', 'test_kiosk_control.py', 'test_skill_runtime.py', 'test_benchmark_device.py', 'test_tablet_watchdog.py')
+CORE_TESTS = ('test_kiosk_experiences.py', 'test_skill_store.py', 'test_kiosk_transport.py', 'test_kiosk_service.py', 'test_kiosk_tools.py', 'test_kiosk_control.py', 'test_skill_runtime.py', 'test_benchmark_device.py', 'test_tablet_watchdog.py', 'test_vision_setup.py')
 EXTRA_TESTS = ('test_reply_quality.py', 'test_tts_stream.py', 'test_protocol.py')
 NATIVE = ('ConnectionPolicy', 'PerformanceFaceCue', 'PlaybackProbe', 'KioskStatus', 'PlaybackQueue', 'CaptionTimeline', 'PerformanceVideoCue')
 PHYSICAL = ('device', 'wifi', 'recovery', 'visual', 'endurance', 'generated_latency')
 REQUIRED_FLAGS = {
     'device': ('voice_and_vision_connected', 'audible_response_verified', 'owner_mute_verified', 'owner_exit_verified'),
-    'wifi': ('usb_disconnected', 'tablet_reconnected', 'voice_and_vision_connected'),
+    'wifi': ('tablet_reconnected', 'voice_and_vision_connected'),
     'recovery': ('child_restart_verified', 'supervisor_restart_verified', 'tablet_reconnected', 'settings_preserved'),
     'visual': ('desktop_reviewed', 'mobile_reviewed', 'tablet_reviewed', 'readable', 'no_clipping', 'controls_verified'),
 }
@@ -105,6 +106,17 @@ def finite_number(value):
     return type(value) in (int, float) and math.isfinite(value) and value >= 0
 
 
+def private_voice_host(value):
+    if not isinstance(value, str):
+        return False
+    try:
+        host = ipaddress.IPv4Address(value)
+        return any(host in ipaddress.IPv4Network(network)
+                   for network in ('10.0.0.0/8', '172.16.0.0/12', '192.168.0.0/16'))
+    except ValueError:
+        return False
+
+
 def review_receipt(path, commit):
     """Check declared observations and bindings; do not pretend to inspect media."""
     path = Path(path)
@@ -138,7 +150,15 @@ def review_receipt(path, commit):
             raise ValueError('Observation metrics required')
         flags = REQUIRED_FLAGS.get(kind, ())
         passed = all(metrics.get(flag) is True for flag in flags)
-        if kind == 'endurance':
+        if kind == 'wifi':
+            private_endpoint = private_voice_host(metrics.get('voice_endpoint_host'))
+            transport = (metrics.get('usb_disconnected') is True or
+                         (metrics.get('usb_reverse_absent') is True and private_endpoint))
+            # Preserve earlier unplugged receipts, but reject a contradictory
+            # endpoint whenever supplied. USB power/control can remain attached.
+            endpoint_consistent = 'voice_endpoint_host' not in metrics or private_endpoint
+            passed = passed and transport and endpoint_consistent
+        elif kind == 'endurance':
             passed = (finite_number(metrics.get('duration_hours')) and metrics['duration_hours'] >= 12
                       and type(metrics.get('unexpected_failures')) is int and metrics['unexpected_failures'] == 0)
         elif kind == 'generated_latency':

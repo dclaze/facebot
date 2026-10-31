@@ -87,11 +87,38 @@ class KioskToolsTests(unittest.TestCase):
         with self.assertRaises(ValueError): setup.commands(self.root, find=lambda _: None)
 
     def test_receipts_require_exact_source_and_real_artifact_hash(self):
-        path = self.receipt('wifi', {flag: True for flag in certify.REQUIRED_FLAGS['wifi']})
+        path = self.receipt('wifi', dict(usb_disconnected=True, tablet_reconnected=True,
+                                        voice_and_vision_connected=True))
         self.assertEqual(certify.review_receipt(path, self.commit)['status'], 'pass')
         self.assertEqual(certify.review_receipt(path, 'b'*40)['status'], 'invalid')
         (self.root / 'observed.txt').write_text('changed')
         self.assertEqual(certify.review_receipt(path, self.commit)['status'], 'invalid')
+
+    def test_wifi_allows_usb_power_with_independent_private_transport_proof(self):
+        for host in ('10.0.0.2', '172.16.0.2', '172.31.255.254', '192.168.1.50'):
+            with self.subTest(host=host):
+                metrics = dict(usb_disconnected=False, usb_reverse_absent=True,
+                               voice_endpoint_host=host, tablet_reconnected=True,
+                               voice_and_vision_connected=True)
+                self.assertEqual(certify.review_receipt(self.receipt('wifi', metrics), self.commit)['status'], 'pass')
+
+    def test_wifi_rejects_missing_or_contradictory_transport_evidence(self):
+        connected = dict(tablet_reconnected=True, voice_and_vision_connected=True)
+        cases = [connected, dict(usb_disconnected=True),
+                 dict(connected, usb_reverse_absent=True),
+                 dict(connected, voice_endpoint_host='192.168.1.50'),
+                 dict(connected, usb_reverse_absent=1, voice_endpoint_host='192.168.1.50')]
+        for host in ('127.0.0.1', 'localhost', '0.0.0.0', '::1', '8.8.8.8', '172.32.0.1',
+                     '169.254.1.2', '100.64.0.2', 'ws://192.168.1.50:8765', None, 123):
+            cases.append(dict(connected, usb_disconnected=True, usb_reverse_absent=True,
+                              voice_endpoint_host=host))
+        for missing in connected:
+            metrics = dict(connected, usb_reverse_absent=True, voice_endpoint_host='192.168.1.50')
+            metrics.pop(missing)
+            cases.append(metrics)
+        for metrics in cases:
+            with self.subTest(metrics=metrics):
+                self.assertEqual(certify.review_receipt(self.receipt('wifi', metrics), self.commit)['status'], 'fail')
 
     def test_replay_and_short_run_cannot_satisfy_physical_endurance(self):
         path = self.receipt('endurance', dict(duration_hours=11.99, unexpected_failures=0))

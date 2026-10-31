@@ -22,7 +22,9 @@ SCENARIOS = ('welcome', 'candy', 'joke', 'scare', 'laugh-invite', 'laugh-turn', 
 UUID = re.compile(r'[0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}\Z')
 EVIDENCE = ('Synthetic host dispatch to observed native AudioTrack playback-head acknowledgement; '
             'upper bound includes return network transit and native polling; excludes VAD, STT and acoustic output. '
-            'Network path is not inferred: independently establish USB-free Wi-Fi before claiming Wi-Fi results.')
+            'Network path is not inferred: independently establish Wi-Fi transport before claiming Wi-Fi results '
+            '(USB disconnected, or no ADB reverse mapping plus an explicit RFC1918 voice endpoint). '
+            'USB may remain attached for power and recovery; verify tablet reconnection and voice/vision separately.')
 
 
 class ProbeError(Exception):
