@@ -49,9 +49,10 @@ class InteractionState:
 
 class VisitorControl(FrameProcessor):
     """Before user aggregation, so stop commands do not ask the LLM to comply."""
-    def __init__(self, state):
+    def __init__(self, state, on_mute=None):
         super().__init__()
         self.state = state
+        self.on_mute = on_mute
 
     async def process_frame(self, frame, direction):
         await super().process_frame(frame, direction)
@@ -62,11 +63,16 @@ class VisitorControl(FrameProcessor):
             if STOP.fullmatch(text):
                 self.state.control_epoch += 1
                 self.state.scene.encounter.silenced = True
+                if self.on_mute:
+                    self.on_mute(True)
                 self.state.response_pending = False
                 await self.broadcast_frame(InterruptionFrame)
                 return
             if RESUME.fullmatch(text):
-                self.state.scene.encounter.silenced = False
+                effective = self.on_mute(False) if self.on_mute else False
+                self.state.scene.encounter.silenced = effective if type(effective) is bool else False
+                if self.state.scene.encounter.silenced:
+                    return
             elif self.state.scene.encounter.silenced:
                 return
         await self.push_frame(frame, direction)
