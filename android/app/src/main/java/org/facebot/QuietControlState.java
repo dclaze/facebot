@@ -25,11 +25,16 @@ final class QuietControlState {
         if(pending) failed=true;
         pending=false; ++request; // Ignore callbacks from the old owner connection.
     }
-    String status() {
+    String status(String voiceState,boolean outputPlaying) {
         if(pending) return requestedQuiet ? "Pausing…" : "Resuming…";
         if(failed) return localHold ? "Paused here · host not confirmed" : "Host not reached · try again";
-        if(serverMuted) return "Quiet mode · tap Resume";
+        if(serverMuted || "Quiet mode".equals(voiceState)) return "Quiet mode · tap Resume";
         if(localHold) return "Paused here · tap Resume";
-        return "Speak after the face finishes";
+        if(outputPlaying) return "Speak after the face finishes";
+        if("Listening".equals(voiceState)) return "Say hello";
+        if("Connecting".equals(voiceState) || "Reconnecting".equals(voiceState))
+            return "One moment… reconnecting";
+        // Pending/unknown transport work must not become a speaking invitation.
+        return "One moment…";
     }
 }

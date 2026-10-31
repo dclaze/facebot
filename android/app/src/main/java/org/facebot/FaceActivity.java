@@ -264,7 +264,7 @@ public final class FaceActivity extends ComponentActivity {
         quietPanel.setVisibility(endpoint==null ? View.GONE : View.VISIBLE);
         boolean enabled=resumed && settingsClient!=null && !quietControl.pending;
         quietButton.setEnabled(enabled);resumeButton.setEnabled(enabled);
-        String text=quietControl.status();
+        String text=quietControl.status(state,outputPlaying());
         if(!text.contentEquals(quietStatus.getText())) quietStatus.setText(text);
     }
     private void persistLocalQuiet() {
