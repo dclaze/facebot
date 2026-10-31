@@ -42,6 +42,15 @@ class KioskToolsTests(unittest.TestCase):
             artifacts=[dict(path=artifact.name, sha256=certify.sha256(artifact))], metrics=metrics)))
         return path
 
+    def test_archive_metadata_is_labelled_declaration_not_verified_source(self):
+        (self.root / 'SOURCE_COMMIT').write_text(self.commit + '\n')
+        state = certify.source_state(self.root)
+        self.assertEqual(state['commit'], self.commit)
+        self.assertEqual(state['provenance'], 'archive_declaration')
+        self.assertIsNone(state['dirty'])
+        (self.root / 'SOURCE_COMMIT').write_text('not a commit')
+        self.assertIsNone(certify.source_state(self.root)['commit'])
+
     def test_check_does_not_create_environment_or_token(self):
         before = list(self.root.iterdir())
         checks = setup.check(self.root, find=lambda _: None)

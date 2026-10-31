@@ -44,9 +44,23 @@ def source_state(root):
     def git(*args):
         return subprocess.check_output(['git', '-C', str(root), *args], text=True, stderr=subprocess.DEVNULL).strip()
     try:
-        return {'commit': git('rev-parse', 'HEAD'), 'dirty': bool(git('status', '--porcelain', '--untracked-files=normal'))}
+        # An extracted archive inside another checkout must not inherit the
+        # enclosing repository's unrelated commit or cleanliness claim.
+        if Path(git('rev-parse', '--show-toplevel')).resolve() == Path(root).resolve():
+            return {'commit': git('rev-parse', 'HEAD'), 'dirty': bool(git('status', '--porcelain', '--untracked-files=normal')),
+                    'provenance': 'git_checkout'}
     except (OSError, subprocess.SubprocessError):
-        return {'commit': None, 'dirty': None}
+        pass
+    declaration = Path(root) / 'SOURCE_COMMIT'
+    try:
+        commit = declaration.read_text().strip()
+        if len(commit) == 40 and all(character in '0123456789abcdef' for character in commit):
+            return {'commit': commit, 'dirty': None, 'provenance': 'archive_declaration',
+                    'declaration_sha256': sha256(declaration),
+                    'note': 'Release metadata identifies the intended commit; extracted source integrity is not established by this declaration alone.'}
+    except OSError:
+        pass
+    return {'commit': None, 'dirty': None, 'provenance': 'unknown'}
 
 
 def item(name, status, level, **detail):
@@ -187,7 +201,8 @@ def software_checks(root, python, quick, check_only, work):
 def markdown(report):
     lines = ['# Facebot internal readiness', '', '**Overall: ' + report['overall'] + '**', '',
              'Generated: ' + report['generated_at'], 'Source commit: ' + str(report['source']['commit']),
-             'Uncommitted changes: ' + str(report['source']['dirty']), '',
+             'Uncommitted changes: ' + str(report['source']['dirty']),
+             'Source provenance: ' + report['source'].get('provenance', 'unknown'), '',
              'This is an internal evidence report, not external certification. Software/replay results do not prove physical behavior.', '',
              '| Check | Status | Evidence |', '| --- | --- | --- |']
     for row in report['checks']:
