@@ -368,7 +368,7 @@ def main():
     import uvicorn
     uvicorn.run(create_app(os.environ.get('FACEBOT_TOKEN','')), host=args.host, port=args.port,
                 ssl_certfile=args.cert, ssl_keyfile=args.key, access_log=False, ws_max_size=256004,
-                ws_max_queue=8)
+                ws_max_queue=8, ws_ping_interval=5, ws_ping_timeout=5)
 
 if __name__ == '__main__':
     main()
