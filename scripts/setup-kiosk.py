@@ -130,8 +130,7 @@ def warm_models(root):
     atomic_json(root / '.local/setup/vision-smoke.json', vision_receipt)
     if vision_receipt['status'] != 'ready':
         raise RuntimeError('Vision setup failed; inspect .local/setup/vision-smoke.json for endpoint/model/freshness errors')
-    import numpy as np
-    import mlx_whisper
+    from server.speech_recognition import STT_MODEL, warm_stt_startup
     from huggingface_hub import snapshot_download
     from server.tts import SpeechEngine
     from server.profiles import load
@@ -140,15 +139,20 @@ def warm_models(root):
     voice = profile['character_profile']['voice']
     rate = read()['speech_rate']
     snapshot_download('mlx-community/Kokoro-82M-bf16')
-    snapshot_download('mlx-community/whisper-tiny.en-mlx')
+    snapshot_download(STT_MODEL)
     engine = SpeechEngine(voice=voice, speed=rate)
     try:
         if not engine.synthesize('Happy Halloween!'):
             raise RuntimeError('Speech prewarm produced no audio')
     finally:
         engine.executor.shutdown()
-    mlx_whisper.transcribe(np.zeros(16000, dtype=np.float32),
-                           path_or_hf_repo='mlx-community/whisper-tiny.en-mlx')
+    try:
+        stt_receipt = asyncio.run(warm_stt_startup())
+    except Exception as error:
+        atomic_json(root / '.local/setup/stt-warmup.json', {
+            'model': STT_MODEL, 'ready': False, 'error_type': type(error).__name__})
+        raise
+    atomic_json(root / '.local/setup/stt-warmup.json', stt_receipt)
     run([sys.executable, str(root / 'scripts/benchmark-kiosk.py'), '--prewarm',
          '--speech-rate', str(rate), '--voice', voice,
          '--output', str(root / '.local/setup/kiosk-prewarm.json')], root)

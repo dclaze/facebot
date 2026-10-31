@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 import numpy as np
 from pipecat.frames.frames import ErrorFrame, TranscriptionFrame
 from pipecat.services.whisper.stt import WhisperSTTServiceMLX
+from server.speech_recognition import STT_MODEL, transcribe
 
 
 def repetition_loop(text):
@@ -53,6 +54,8 @@ def select_transcript(result):
 
 class LocalSTT(WhisperSTTServiceMLX):
     def __init__(self, *, recorder=None, **kwargs):
+        if "settings" not in kwargs and "model" not in kwargs:
+            kwargs["settings"] = self.Settings(model=STT_MODEL)
         super().__init__(**kwargs)
         self.recorder = recorder
         self.counts = Counter()
@@ -61,12 +64,9 @@ class LocalSTT(WhisperSTTServiceMLX):
         started = time.monotonic()
         await self.start_processing_metrics()
         try:
-            import mlx_whisper
             pcm = np.frombuffer(audio, dtype=np.int16).astype(np.float32) / 32768.
             result = await asyncio.to_thread(
-                mlx_whisper.transcribe, pcm,
-                path_or_hf_repo=self._settings.model,
-                temperature=0., language='en', condition_on_previous_text=False,
+                transcribe, pcm, model=self._settings.model,
             )
             text, reasons = select_transcript(result)
             self.counts['utterances'] += 1

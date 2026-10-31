@@ -27,6 +27,9 @@ The Python lock and tokenizer revision are pinned. Ollama model tags and the ups
 
 A new private `.local/pairing-token` is generated only when absent, with owner-only permissions. An existing valid token is preserved; an invalid token causes setup to stop rather than silently unpair devices. Never publish `.local`, a token, a preconfigured development APK, or your private recordings. Setup does not start Facebot, install a LaunchAgent, install an APK or change the router.
 
+
+Speech recognition uses `mlx-community/whisper-small.en-mlx` for both setup and live visitor turns. It costs more memory and inference time than `tiny.en`; isolated excerpts captured by the actual tablet microphone recognized greeting, joke and scare requests correctly with `small.en`, where smaller models misheard some phrases. Those samples do not establish general accuracy or end-to-end latency. No keyword prompt or relaxed scare trigger is used. Setup downloads the same model and records a synthetic silence warmup in `.local/setup/stt-warmup.json`. Each service process warms it again before accepting visitors, with a 60-second readiness deadline; errors or timeout fail startup. Native inference already running in a worker cannot be cancelled by that deadline. `/health` reports the model and synthetic warmup timing, not microphone accuracy.
+
 ## Connect the tablet
 
 Obtain the signed public release APK and compare its SHA256 against the release's separately supplied checksum. Install it using Android's owner-approved package installer. The public APK must have no `assets/local-config.json`; it prompts the owner for connection information. Its `org.facebot` application/signing key may differ from a development installation, so preserve needed settings before an owner-managed replacement.

@@ -21,6 +21,7 @@ from pipecat.processors.aggregators.llm_context import LLMContext
 from pipecat.processors.aggregators.llm_response_universal import LLMContextAggregatorPair, LLMUserAggregatorParams
 from pipecat.services.ollama.llm import OLLamaLLMService
 from server.transcription import LocalSTT
+from server.speech_recognition import STT_MODEL, warm_stt_startup
 from pipecat.transports.websocket.fastapi import FastAPIWebsocketTransport, FastAPIWebsocketParams
 from pipecat.turns.user_turn_strategies import UserTurnStrategies
 from pipecat.turns.user_stop.speech_timeout_user_turn_stop_strategy import SpeechTimeoutUserTurnStopStrategy
@@ -131,14 +132,19 @@ def create_app(token, engine=None):
     vision = VisionState()
     labeler = ImageLabeler(vision)
     vision_occupied = asyncio.Lock()
+    stt_readiness = {'model': STT_MODEL, 'ready': False}
     @asynccontextmanager
     async def lifespan(app):
-        # Startup warm-up is synthetic and not a visitor-latency measurement.
-        await engine.render(active()['arrival'][0])
-        yield
-        recorder.close()
-        await labeler.close()
-        engine.executor.shutdown(wait=True, cancel_futures=True)
+        nonlocal stt_readiness
+        try:
+            # Readiness waits for this process's synthetic speech warmups.
+            stt_readiness = await warm_stt_startup()
+            await engine.render(active()['arrival'][0])
+            yield
+        finally:
+            recorder.close()
+            await labeler.close()
+            engine.executor.shutdown(wait=True, cancel_futures=True)
 
     app = FastAPI(lifespan=lifespan, docs_url=None, redoc_url=None)
     add_media_route(app, robin_skit, token)
@@ -148,6 +154,7 @@ def create_app(token, engine=None):
     @app.get('/health')
     async def health():
         return {'status':'ready', 'occupied':occupied.locked(), 'protocol':1, 'kiosk_mode':os.environ.get('FACEBOT_KIOSK_MODE') == '1', 'profile':active()['id'], 'scripted_quips':quips.report() if quips else {'enabled':False}, 'robin_skit':robin_skit.report(),
+                'stt': stt_readiness,
                 'tts':{'backend':'qwen3' if getattr(engine, 'supports_emotion', False) else 'kokoro', 'model':engine.model_name, 'voice':engine.voice,
                        'emotion_controls':getattr(engine, 'supports_emotion', False)},
                 'sound_effects':{'types':len(sound_bank.effects),'clips':len(sound_bank.pcm), 'automatic':sound_performance_config is not None, 'routing_version':2}}
@@ -281,7 +288,7 @@ def create_app(token, engine=None):
                 vad_analyzer=SileroVADAnalyzer(params=VADParams(start_secs=.1, stop_secs=.45)),
                 user_turn_strategies=UserTurnStrategies(stop=[SpeechTimeoutUserTurnStopStrategy(user_speech_timeout=.25)])))
             stt = LocalSTT(recorder=recorder, settings=LocalSTT.Settings(
-                model='mlx-community/whisper-tiny.en-mlx'))
+                model=STT_MODEL))
             interaction.stt = stt
             llm = OLLamaLLMService(base_url='http://127.0.0.1:11434/v1', settings=OLLamaLLMService.Settings(
                 model=os.environ.get('FACEBOT_LLM','qwen2.5:1.5b'),

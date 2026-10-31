@@ -45,7 +45,7 @@ class KioskTests(unittest.IsolatedAsyncioTestCase):
 
     def test_negative_and_noisy_requests_do_not_trigger(self):
         for text in [None, {}, [], '', '  ', 'zzzx krr', 'tell me', 'joke joke joke',
-                     'do not scare me', "don't tell me a joke", 'stop telling jokes',
+                     'Scaring me', 'do not scare me', "don't tell me a joke", 'stop telling jokes',
                      'my friend said scare me', 'I heard laughing game in a movie',
                      'tell me a joke and scare me', 'is Robin Williams there?',
                      'play a ghost laugh', 'a' * 181]:

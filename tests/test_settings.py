@@ -117,7 +117,7 @@ class SettingsTests(unittest.TestCase):
         from server.app import create_app
         engine=Mock();engine.render=AsyncMock()
         token='synthetic-token-for-test-only'
-        with patch('server.app.ContextBudget'), patch.object(settings,'read',return_value=dict(settings.DEFAULTS,character_name='Casper')):
+        with patch('server.app.ContextBudget'), patch('server.app.warm_stt_startup', new=AsyncMock()), patch.object(settings,'read',return_value=dict(settings.DEFAULTS,character_name='Casper')):
             with TestClient(create_app(token,engine)) as client:
                 self.assertEqual(client.get('/runtime-settings').status_code,403)
                 response=client.get('/runtime-settings',headers={'Authorization':'Bearer '+token})
