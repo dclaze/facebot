@@ -27,6 +27,7 @@ final class VoiceClient extends WebSocketListener {
     private final Object audioLock = new Object();
     private final ArrayDeque<MouthCue> mouthCues = new ArrayDeque<>();
     private final CaptionTimeline captions = new CaptionTimeline();
+    private final PlaybackProbe playbackProbe=new PlaybackProbe();
     private long writtenSamples;
     private java.util.function.Consumer<JSONObject> videoListener=event -> {};
     void setVideoListener(java.util.function.Consumer<JSONObject> listener){videoListener=listener;}
@@ -106,7 +107,7 @@ final class VoiceClient extends WebSocketListener {
         if (token==null || token.length()<24) { listener.state("Pairing required",false); close(); return; }
         listener.state("Connecting",false);
         socket=http.newWebSocket(new Request.Builder().url(url).header("Authorization","Bearer "+token)
-            .header("X-Facebot-Capabilities","performance-video-v1,performance-face-v1").build(),this);
+            .header("X-Facebot-Capabilities","performance-video-v1,performance-face-v1,playback-probe-v1").build(),this);
     }
     @Override public void onOpen(WebSocket ws, Response response) {
         if (closed.get()) { ws.cancel(); return; }
@@ -187,11 +188,22 @@ final class VoiceClient extends WebSocketListener {
         catch(Exception error) { if(!closed.get()) fail(); }
     }
     private void observePlayback() {
+        PlaybackProbe.Receipt receipt=null;
         synchronized(audioLock) {
+            if(player!=null && !closed.get()) receipt=playbackProbe.observed(epoch,
+                Integer.toUnsignedLong(player.getPlaybackHeadPosition()),android.os.SystemClock.elapsedRealtime());
             if (!playbackObserved && player!=null && player.getPlaybackHeadPosition()!=0) {
                 playbackObserved=true;
                 Log.i("FacebotAudio", "Native playback head advanced; received server PCM consumed");
             }
+        }
+        if(receipt!=null && !closed.get()) {
+            try {
+                JSONObject event=new JSONObject();event.put("type","playback_receipt");event.put("id",receipt.id);
+                event.put("epoch",receipt.epoch);event.put("sample",receipt.sample);
+                WebSocket ws=socket;
+                if(ws!=null) ws.send(event.toString());
+            } catch(Exception ignored) { /* Diagnostic receipts never affect audio. */ }
         }
     }
     @Override public void onMessage(WebSocket ws, ByteString bytes) {
@@ -214,6 +226,12 @@ final class VoiceClient extends WebSocketListener {
                 if(incoming<epoch)return;
                 if(incoming>epoch)flush(incoming);
                 videoListener.accept(event);
+            }
+            else if(event.getString("type").equals("playback_probe")) {
+                synchronized(audioLock) {
+                    playbackProbe.arm(event.getString("id"),event.getLong("epoch"),epoch,
+                        event.getLong("offset"),android.os.SystemClock.elapsedRealtime());
+                }
             }
             else if(event.getString("type").equals("performance_face")) {
                 long incoming=event.getLong("epoch");
@@ -267,7 +285,7 @@ final class VoiceClient extends WebSocketListener {
     private void flush(long next) {
         synchronized(audioLock) {
             if(next<epoch) return;
-            epoch=next; performanceFace.reset(); output.clear(); mouthCues.clear(); captions.reset(next); writtenSamples=0;
+            epoch=next; playbackProbe.reset(); performanceFace.reset(); output.clear(); mouthCues.clear(); captions.reset(next); writtenSamples=0;
             if(player!=null) { player.pause(); player.flush(); if(!closed.get()) player.play(); }
         }
         listener.state("Listening",false);
@@ -284,7 +302,7 @@ final class VoiceClient extends WebSocketListener {
         if(socket!=null) socket.cancel();
         output.clear();
         synchronized(audioLock) {
-            mouthCues.clear(); captions.reset(epoch); performanceFace.reset();
+            mouthCues.clear(); captions.reset(epoch); playbackProbe.reset(); performanceFace.reset();
             if(player!=null) { try { player.pause(); player.flush(); } catch(IllegalStateException ignored) { } }
         }
         control.execute(() -> {

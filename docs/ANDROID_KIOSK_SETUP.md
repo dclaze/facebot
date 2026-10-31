@@ -29,3 +29,5 @@ Build the signed public artifact with `python3 scripts/build-public-apk.py`. It 
 ## Acceptance record
 
 Run `sh scripts/test-android-kiosk.sh`, `sh scripts/test-android-captions.sh` and `sh scripts/test-playback-queue.sh` before building. Review actual idle, audio/caption, video, special face, disconnect/reconnect and owner-setup frames using the kiosk visual review skill. Record source commit, APK hash, installed build, USB-free connectivity evidence and observed return after interruption. Native unit tests establish policy/timing bounds; they do not establish physical acoustics, OS recovery or an overnight soak.
+
+A diagnostic playback probe uses a UUID, epoch and PCM offset. The tablet acknowledges once only after the observed AudioTrack playback head passes that offset; interruption, disconnect and a 15-second timeout discard the probe. Dispatch-to-receipt timing includes outbound Wi-Fi, native playback progress, polling and return Wi-Fi. It does not measure acoustic output, VAD or speech recognition. No speech text or media content is returned.
