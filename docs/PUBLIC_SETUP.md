@@ -4,6 +4,8 @@ This release uses an **Android tablet plus an Apple Silicon Mac host**. The APK 
 
 On the tested Lenovo TB-J606F with Android 11, the compatibility profile avoids a vendor echo-cancellation path associated with observed audio-service crashes. Speak after the face finishes, or use **Quiet** to stop output and **Resume** to allow it again. Quiet persists through app restart; controls stay above video without covering its title. This profile does not support spoken interruption during playback. See [Android kiosk setup](ANDROID_KIOSK_SETUP.md) for the precise scope and limits. Experimental software echo cancellation is not included in the public APK.
 
+Android 0.2.3 adds thermal-status workload adaptation on Android 10 and newer: when Android reports severe throttling, the app requests fewer attention analyses and face redraws. This does not override system protection, and it is not a temperature or endurance guarantee. The host also supervises demanded speech work that has stopped making progress; see [recovery behavior and limits](KIOSK_RECOVERY.md#unresponsive-speech-worker-recovery). Existing installations should update both the signed APK and host source while preserving their private configuration.
+
 The bundled packs are free. There is no checkout, subscription or paid inference service in this setup. The personal guest performance is separately supplied local media and is not included. Project code, model weights, voices and sound recordings retain their own licenses; see the repository license and each content package's credits before redistribution.
 
 ## Prepare the Mac

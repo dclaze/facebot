@@ -160,3 +160,7 @@ voice/vision freshness and resource observations before claiming improvement.
 Run `sh scripts/test-thermal-workload.sh` for synthetic transition, timing and
 frame-ownership checks; physical lifecycle/API availability still needs device
 verification.
+
+### Manufacturer floating controls
+
+Some Lenovo tablets expose **Smart Navigation** in Android Settings. Its floating edge handle can remain visible above an immersive app. If present on your tablet, turn that switch off for the kiosk and record its previous state so you can restore it afterward. This is separate from Android system navigation, screen pinning and owner authentication; turning off the handle does not lock the device. The tested tablet resumed voice and fresh vision after returning from Settings. Other manufacturers and Android versions may use different controls.
