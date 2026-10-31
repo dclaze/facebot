@@ -50,7 +50,8 @@ class InteractionTests(unittest.IsolatedAsyncioTestCase):
         await self.control.process_frame(TranscriptionFrame('Please stop talking.', '', ''), FrameDirection.DOWNSTREAM)
         self.assertTrue(self.scene.encounter.silenced)
         self.control.broadcast_frame.assert_awaited_once()
-        self.control.push_frame.assert_not_called()
+        self.assertEqual(self.control.push_frame.call_args.args[0].message,
+                         {'type': 'kiosk_state', 'muted': True})
         await self.proactive.process_frame(LLMContextFrame(self.context), FrameDirection.DOWNSTREAM)
         self.proactive.push_frame.assert_not_called()
         await self.control.process_frame(TranscriptionFrame('You can talk again.', '', ''), FrameDirection.DOWNSTREAM)

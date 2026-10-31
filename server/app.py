@@ -210,11 +210,13 @@ def create_app(token, engine=None):
             raise HTTPException(status_code=403)
         effective = mute.set_muted(True)
         if current_interaction and current_task:
-            from pipecat.frames.frames import InterruptionFrame
+            from pipecat.frames.frames import InterruptionFrame, OutputTransportMessageFrame
             current_interaction.scene.encounter.silenced = effective
             current_interaction.control_epoch += 1
             current_interaction.response_pending = False
             await current_task.queue_frame(InterruptionFrame())
+            await current_task.queue_frame(OutputTransportMessageFrame(message={
+                'type': 'kiosk_state', 'muted': effective}))
         probes.cancel()
         return {'status':'muted'}
 
@@ -225,6 +227,10 @@ def create_app(token, engine=None):
         effective = mute.set_muted(False)
         if current_interaction:
             current_interaction.scene.encounter.silenced = effective
+            if current_task:
+                from pipecat.frames.frames import OutputTransportMessageFrame
+                await current_task.queue_frame(OutputTransportMessageFrame(message={
+                    'type': 'kiosk_state', 'muted': effective}))
         if effective:
             raise HTTPException(status_code=503, detail='Mute settings could not be saved; staying muted')
         return {'status':'unmuted' if current_interaction else 'disconnected'}

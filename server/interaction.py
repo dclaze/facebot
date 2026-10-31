@@ -10,9 +10,9 @@ from pipecat.frames.frames import (
     StartFrame, EndFrame, CancelFrame, TranscriptionFrame, InterruptionFrame,
     UserStartedSpeakingFrame, UserStoppedSpeakingFrame,
     VADUserStartedSpeakingFrame, VADUserStoppedSpeakingFrame,
-    BotStartedSpeakingFrame, BotStoppedSpeakingFrame, LLMContextFrame,
+    BotStartedSpeakingFrame, BotStoppedSpeakingFrame, LLMContextFrame, OutputTransportMessageFrame,
 )
-from pipecat.processors.frame_processor import FrameProcessor
+from pipecat.processors.frame_processor import FrameProcessor, FrameDirection
 
 STOP = re.compile(r"^(?:(?:please|boo)[ ,]+)?(?:stop(?: talking| speaking| laughing| the game| game)?|be quiet|quiet|silence|shut up|leave me alone)(?: please)?[.!?]*$", re.I)
 RESUME = re.compile(r"^(?:please )?(?:you can talk again|talk again|start talking|continue talking|you can speak now)[.!?]*$", re.I)
@@ -54,10 +54,19 @@ class VisitorControl(FrameProcessor):
         self.state = state
         self.on_mute = on_mute
 
+    async def send_state(self):
+        await self.push_frame(OutputTransportMessageFrame(message={
+            'type': 'kiosk_state', 'muted': self.state.scene.encounter.silenced}), FrameDirection.DOWNSTREAM)
+
     async def process_frame(self, frame, direction):
         await super().process_frame(frame, direction)
         self.state.observe_frame(frame)
-        if isinstance(frame, TranscriptionFrame):
+        if isinstance(frame, StartFrame) and direction == FrameDirection.DOWNSTREAM:
+            # Initialize the transport before replaying the persisted state.
+            await self.push_frame(frame, direction)
+            await self.send_state()
+            return
+        if isinstance(frame, TranscriptionFrame) and direction == FrameDirection.DOWNSTREAM:
             self.state.scene.encounter.engaged()
             text = frame.text.strip()
             if STOP.fullmatch(text):
@@ -67,10 +76,12 @@ class VisitorControl(FrameProcessor):
                     self.on_mute(True)
                 self.state.response_pending = False
                 await self.broadcast_frame(InterruptionFrame)
+                await self.send_state()
                 return
             if RESUME.fullmatch(text):
                 effective = self.on_mute(False) if self.on_mute else False
                 self.state.scene.encounter.silenced = effective if type(effective) is bool else False
+                await self.send_state()
                 if self.state.scene.encounter.silenced:
                     return
             elif self.state.scene.encounter.silenced:

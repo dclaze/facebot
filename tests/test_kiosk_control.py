@@ -4,7 +4,7 @@ import tempfile
 import unittest
 from unittest.mock import AsyncMock, patch
 
-from pipecat.frames.frames import TranscriptionFrame
+from pipecat.frames.frames import TranscriptionFrame, OutputTransportMessageFrame, StartFrame, InterruptionFrame
 from pipecat.processors.frame_processor import FrameDirection
 from server.interaction import InteractionState, VisitorControl
 from server.kiosk_control import MuteLatch
@@ -75,4 +75,89 @@ class MuteTests(unittest.IsolatedAsyncioTestCase):
         with patch('server.kiosk_control.atomic_json', side_effect=OSError('test storage failure')):
             await processor.process_frame(TranscriptionFrame('you can talk again', '', ''), FrameDirection.DOWNSTREAM)
         self.assertTrue(state.scene.encounter.silenced)
-        processor.push_frame.assert_not_called()
+        messages = [call.args[0] for call in processor.push_frame.call_args_list]
+        self.assertEqual(len(messages), 1)
+        self.assertEqual(messages[0].message, {'type': 'kiosk_state', 'muted': True})
+
+
+class StateCueTests(unittest.IsolatedAsyncioTestCase):
+    async def setup_processor(self, processor):
+        from pipecat.clocks.system_clock import SystemClock
+        from pipecat.utils.asyncio.task_manager import TaskManager
+        from pipecat.processors.frame_processor import FrameProcessorSetup
+        await processor.setup(FrameProcessorSetup(clock=SystemClock(), task_manager=TaskManager(), pipeline_worker=None))
+
+    async def test_reconnect_replays_persisted_mute_after_start(self):
+        with tempfile.TemporaryDirectory() as root:
+            path = Path(root)/'state.json'
+            MuteLatch(path).set_muted(True)
+            state = InteractionState(SceneState())
+            state.scene.encounter.silenced = MuteLatch(path).value
+            processor = VisitorControl(state)
+            processor.push_frame = AsyncMock()
+            await self.setup_processor(processor)
+            start = StartFrame()
+            await processor.process_frame(start, FrameDirection.DOWNSTREAM)
+            frames = [call.args[0] for call in processor.push_frame.call_args_list]
+            self.assertIs(frames[0], start)
+            self.assertEqual(frames[1].message, {'type': 'kiosk_state', 'muted': True})
+            await processor.cleanup()
+
+    async def test_stop_interrupt_is_before_muted_cue_and_resume_false_cue(self):
+        state = InteractionState(SceneState())
+        processor = VisitorControl(state)
+        order = []
+        async def broadcast(kind):
+            order.append(kind)
+        async def push(frame, direction):
+            order.append(frame)
+        processor.broadcast_frame = broadcast
+        processor.push_frame = push
+        await processor.process_frame(TranscriptionFrame('stop', '', ''), FrameDirection.DOWNSTREAM)
+        self.assertIs(order[0], InterruptionFrame)
+        self.assertEqual(order[1].message, {'type': 'kiosk_state', 'muted': True})
+        order.clear()
+        await processor.process_frame(TranscriptionFrame('you can talk again', '', ''), FrameDirection.DOWNSTREAM)
+        self.assertEqual(order[0].message, {'type': 'kiosk_state', 'muted': False})
+        self.assertIsInstance(order[1], TranscriptionFrame)
+
+    async def test_upstream_start_does_not_duplicate_native_state(self):
+        processor = VisitorControl(InteractionState(SceneState()))
+        processor.push_frame = AsyncMock()
+        await self.setup_processor(processor)
+        start = StartFrame()
+        await processor.process_frame(start, FrameDirection.UPSTREAM)
+        processor.push_frame.assert_awaited_once_with(start, FrameDirection.UPSTREAM)
+        await processor.cleanup()
+
+
+class OwnerStateCueTests(unittest.TestCase):
+    def test_authenticated_stop_and_resume_queue_order_and_failed_resume(self):
+        from fastapi.testclient import TestClient
+        from types import SimpleNamespace
+        from unittest.mock import Mock
+        from server.app import create_app
+        with tempfile.TemporaryDirectory() as root:
+            latch = MuteLatch(Path(root)/'state.json')
+            with patch('server.app.ContextBudget'), patch('server.app.MuteLatch', return_value=latch):
+                app = create_app('synthetic-kiosk-state-token-0001', Mock())
+            stop = next(route.endpoint for route in app.routes if route.path == '/owner/stop')
+            cells = dict(zip(stop.__code__.co_freevars, stop.__closure__))
+            state = InteractionState(SceneState())
+            task = SimpleNamespace(queue_frame=AsyncMock())
+            cells['current_interaction'].cell_contents = state
+            cells['current_task'].cell_contents = task
+            client = TestClient(app)
+            headers = {'Authorization': 'Bearer synthetic-kiosk-state-token-0001'}
+            self.assertEqual(client.post('/owner/stop').status_code, 403)
+            self.assertEqual(client.post('/owner/stop', headers=headers).status_code, 200)
+            frames = [call.args[0] for call in task.queue_frame.call_args_list]
+            self.assertIsInstance(frames[0], InterruptionFrame)
+            self.assertEqual(frames[1].message, {'type': 'kiosk_state', 'muted': True})
+            self.assertTrue(MuteLatch(latch.path).value)
+            task.queue_frame.reset_mock()
+            self.assertEqual(client.post('/owner/resume', headers=headers).status_code, 200)
+            self.assertEqual(task.queue_frame.call_args.args[0].message, {'type': 'kiosk_state', 'muted': False})
+            with patch('server.kiosk_control.atomic_json', side_effect=OSError('storage failure')):
+                self.assertEqual(client.post('/owner/resume', headers=headers).status_code, 503)
+            self.assertEqual(task.queue_frame.call_args.args[0].message, {'type': 'kiosk_state', 'muted': True})
