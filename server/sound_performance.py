@@ -44,9 +44,10 @@ def load_performance(profile_id, bank):
 
 
 class SoundPerformance:
-    def __init__(self, bank, state, config=None, clock=time.monotonic):
+    def __init__(self, bank, state, config=None, clock=time.monotonic, pack_enabled=lambda: True):
         self.bank,self.state,self.config,self.clock=bank,state,config,clock
         self.enabled=config is not None
+        self.pack_enabled=pack_enabled
         self.turn=0
         self.replies=0
         self.last_reply=-100
@@ -81,7 +82,7 @@ class SoundPerformance:
 
     def choose(self,speech):
         self.replies+=1
-        if (not self.enabled or not self.config or self.blocked or not speech
+        if (not self.enabled or not self.pack_enabled() or not self.config or self.blocked or not speech
                 or speech==FALLBACK or SERIOUS.search(speech)
                 or self.state.scene.encounter.silenced or self.state.user_speaking
                 or self.clock()-self.last_at<self.config['cooldown_seconds']

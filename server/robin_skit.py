@@ -112,12 +112,13 @@ class RobinSkitFrame(DataFrame):
 
 class RobinSkitRequest(FrameProcessor):
     def __init__(self, skit, state, mark=None, name_provider=lambda: 'Boo',
-                 performance=None, clock=time.monotonic):
+                 performance=None, clock=time.monotonic, enabled=lambda: True):
         super().__init__()
         self.skit, self.state, self.mark = skit, state, mark
         self.name_provider, self.performance, self.clock = name_provider, performance, clock
         self.last_request = float('-inf')
         self.intent_frame = None
+        self.enabled = enabled
 
     async def process_frame(self, frame, direction):
         await super().process_frame(frame, direction)
@@ -141,6 +142,11 @@ class RobinSkitRequest(FrameProcessor):
             self.performance.direct()
         if self.state.scene.encounter.silenced or self.state.user_speaking:
             self.state.response_pending = False
+            return
+        if not self.enabled():
+            if self.mark:
+                self.mark('prepared_reply')
+            await self.push_frame(TTSSpeakFrame('That performance is resting tonight.'), direction)
             return
         # Ignore duplicate final transcripts; another request can replay.
         now = self.clock()

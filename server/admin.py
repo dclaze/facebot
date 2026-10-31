@@ -59,6 +59,32 @@ def create_admin(host='192.168.4.32', port=8766, allowed_clients=()):
     async def packs():
         return FileResponse(ROOT/'web/packs.html')
 
+    @app.get('/store')
+    async def store_page():
+        return FileResponse(ROOT/'web/store.html')
+
+    @app.get('/api/store')
+    async def store_catalog():
+        from server.skill_store import snapshot
+        return snapshot()
+
+    @app.put('/api/store/{pack_id}')
+    async def store_update(pack_id: str, request: Request):
+        from server.skill_store import update
+        body = await request.body()
+        if len(body) > 1024:
+            raise HTTPException(413)
+        try:
+            return update(pack_id, json.loads(body))
+        except LookupError as error:
+            raise HTTPException(404, str(error))
+        except RuntimeError as error:
+            raise HTTPException(409, str(error))
+        except (ValueError, TypeError) as error:
+            raise HTTPException(400, str(error))
+        except OSError:
+            raise HTTPException(503, 'Could not save skills. Existing settings remain in place.')
+
     @app.get('/quips')
     async def quips_page():
         return FileResponse(ROOT/'web/quips.html')
@@ -67,7 +93,7 @@ def create_admin(host='192.168.4.32', port=8766, allowed_clients=()):
         try:
             token = (ROOT/'.local/pairing-token').read_text().strip()
             async with httpx.AsyncClient(timeout=5, trust_env=False) as client:
-                response = await client.request(method, 'http://127.0.0.1:8765/'+route,
+                response = await client.request(method, f'http://{host}:8765/'+route,
                     headers={'Authorization':'Bearer '+token}, json=payload)
             if response.status_code >= 400:
                 detail = response.json().get('detail', 'Voice command failed')
@@ -172,7 +198,7 @@ def create_admin(host='192.168.4.32', port=8766, allowed_clients=()):
         async with httpx.AsyncClient(timeout=1, trust_env=False) as client:
             for field, route in [('voice','health'), ('vision','vision/diagnostics'), ('runtime','runtime-settings')]:
                 try:
-                    response = await client.get('http://127.0.0.1:8765/'+route, headers={'Authorization':'Bearer '+token})
+                    response = await client.get(f'http://{host}:8765/'+route, headers={'Authorization':'Bearer '+token})
                     response.raise_for_status(); result[field] = response.json()
                 except (httpx.HTTPError, ValueError): pass
         usage = ROOT/'.local/codex-usage.json'

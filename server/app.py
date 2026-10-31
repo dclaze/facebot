@@ -33,7 +33,9 @@ from server.timing import StageTiming
 from server.recording import InteractionRecorder, RecordingTap
 from server.hearing import HearingRepair
 from server.prepared_conversation import PreparedConversation
-from server import settings
+from server.kiosk_playback import KioskPlayback
+from server.playback_probe import PlaybackProbes, SCENARIOS
+from server import settings, skill_store
 from server.profiles import active
 from server.context_budget import ContextBudget, BudgetedContext
 from server.interaction import InteractionState, VisitorControl, ProactiveTurn
@@ -115,6 +117,7 @@ def create_app(token, engine=None):
     current_quips = None
     recorder = InteractionRecorder.configured()
     timing = StageTiming()
+    probes = PlaybackProbes()
     sound_bank = SoundBank()
     robin_skit = RobinSkit()
     sound_performance_config = load_performance(active()['id'], sound_bank)
@@ -142,7 +145,7 @@ def create_app(token, engine=None):
 
     @app.get('/health')
     async def health():
-        return {'status':'ready', 'occupied':occupied.locked(), 'protocol':1, 'profile':active()['id'], 'scripted_quips':quips.report() if quips else {'enabled':False}, 'robin_skit':robin_skit.report(),
+        return {'status':'ready', 'occupied':occupied.locked(), 'protocol':1, 'kiosk_mode':os.environ.get('FACEBOT_KIOSK_MODE') == '1', 'profile':active()['id'], 'scripted_quips':quips.report() if quips else {'enabled':False}, 'robin_skit':robin_skit.report(),
                 'tts':{'backend':'qwen3' if getattr(engine, 'supports_emotion', False) else 'kokoro', 'model':engine.model_name, 'voice':engine.voice,
                        'emotion_controls':getattr(engine, 'supports_emotion', False)},
                 'sound_effects':{'types':len(sound_bank.effects),'clips':len(sound_bank.pcm), 'automatic':sound_performance_config is not None, 'routing_version':2}}
@@ -162,6 +165,7 @@ def create_app(token, engine=None):
         if not hmac.compare_digest(authorization, 'Bearer ' + token):
             raise HTTPException(status_code=403)
         report = timing.report()
+        report['playback_probes'] = probes.report()
         report['recording'] = recorder.report()
         report['transcription'] = current_interaction.stt.report() if current_interaction else None
         report['scripted_quips'] = quips.report() if quips else {'enabled': False}
@@ -174,6 +178,49 @@ def create_app(token, engine=None):
             'performance_video_enabled': getattr(current_interaction,'performance_video_enabled',False),
         } if current_interaction else None)
         return report
+
+    @app.post('/owner/rehearse/{scenario}')
+    async def rehearse(scenario: str, authorization: str = Header(default='')):
+        if not hmac.compare_digest(authorization, 'Bearer ' + token):
+            raise HTTPException(status_code=403)
+        if scenario not in SCENARIOS:
+            raise HTTPException(status_code=404, detail='Unknown rehearsal')
+        if not current_task or not current_interaction:
+            raise HTTPException(status_code=409, detail='No connected face')
+        if not getattr(current_interaction, 'playback_probes_enabled', False):
+            raise HTTPException(status_code=409, detail='Update the tablet for native playback receipts')
+        if (current_interaction.scene.encounter.silenced or current_interaction.user_speaking
+                or current_interaction.bot_speaking or current_interaction.response_pending):
+            raise HTTPException(status_code=409, detail='Wait for an unmuted idle face')
+        try:
+            identifier = probes.begin(scenario)
+        except RuntimeError as error:
+            raise HTTPException(status_code=409, detail=str(error))
+        from pipecat.frames.frames import OutputTransportMessageFrame
+        await current_task.queue_frame(OutputTransportMessageFrame(message={'type':'playback_probe','id':identifier}))
+        await current_task.queue_frame(LLMContextFrame(LLMContext([{'role':'user','content':SCENARIOS[scenario]}])))
+        return {'id': identifier, 'status':'queued', 'evidence':'synthetic scenario; not microphone recognition or audible latency'}
+
+    @app.post('/owner/stop')
+    async def owner_stop(authorization: str = Header(default='')):
+        if not hmac.compare_digest(authorization, 'Bearer ' + token):
+            raise HTTPException(status_code=403)
+        if current_interaction and current_task:
+            from pipecat.frames.frames import InterruptionFrame
+            current_interaction.scene.encounter.silenced = True
+            current_interaction.control_epoch += 1
+            current_interaction.response_pending = False
+            await current_task.queue_frame(InterruptionFrame())
+        probes.cancel()
+        return {'status':'muted'}
+
+    @app.post('/owner/resume')
+    async def owner_resume(authorization: str = Header(default='')):
+        if not hmac.compare_digest(authorization, 'Bearer ' + token):
+            raise HTTPException(status_code=403)
+        if current_interaction:
+            current_interaction.scene.encounter.silenced = False
+        return {'status':'unmuted' if current_interaction else 'disconnected'}
 
     @app.post('/skills/robin-williams/preview')
     async def preview_robin(utterance: str = 'Is Robin Williams there?', authorization: str = Header(default='')):
@@ -206,10 +253,11 @@ def create_app(token, engine=None):
             await ws.accept()
             scene = SceneState()
             interaction = InteractionState(scene)
-            performance = SoundPerformance(sound_bank, interaction, sound_performance_config)
+            performance = SoundPerformance(sound_bank, interaction, sound_performance_config,
+                                           pack_enabled=lambda: skill_store.enabled('sound-effects'))
             interaction.sound_performance = performance
             current_interaction = interaction
-            codec = FaceSerializer(on_scene=scene.update, recorder=recorder)
+            codec = FaceSerializer(on_scene=scene.update, recorder=recorder, probes=probes)
             transport = FastAPIWebsocketTransport(ws, FastAPIWebsocketParams(
                 audio_in_enabled=True, audio_out_enabled=True,
                 audio_in_sample_rate=16000, audio_out_sample_rate=24000,
@@ -225,12 +273,13 @@ def create_app(token, engine=None):
                 model=os.environ.get('FACEBOT_LLM','qwen2.5:1.5b'),
                 max_completion_tokens=64, temperature=.7,
                 extra={'extra_body':{'think':False}}))
-            robin_request = RobinSkitRequest(robin_skit, interaction, mark=timing.mark, name_provider=lambda: settings.read()['character_name'], performance=performance)
+            robin_request = RobinSkitRequest(robin_skit, interaction, mark=timing.mark, name_provider=lambda: settings.read()['character_name'], performance=performance, enabled=lambda: skill_store.enabled('robin-williams'))
             video_enabled = bool({'performance_video_v1','performance-video-v1'} & {x.strip() for x in ws.headers.get('x-facebot-capabilities','').split(',')})
             interaction.performance_video_enabled = video_enabled
+            interaction.playback_probes_enabled = 'playback-probe-v1' in ws.headers.get('x-facebot-capabilities','').split(',')
             current_quips = OwnerQuips(interaction, mark=timing.mark)
-            pipeline = Pipeline([transport.input(), stt, RecordingTap(recorder, "input"), FrameTrace(name="after_stt", timing=timing), VisitorControl(interaction), pair.user(), ProactiveTurn(interaction, context, vision=vision, quips=quips), robin_request, SoundEffectRequest(sound_bank, interaction, mark=timing.mark, name_provider=lambda: settings.read()['character_name'], performance=performance), VisualReaction(interaction, mark=timing.mark), HearingRepair(name=active()['character_profile']['defaults']['character_name'], mark=timing.mark, name_provider=lambda: settings.read()['character_name']), PreparedConversation(interaction, mark=timing.mark), FrameTrace(name="before_llm", scene=scene, timing=timing, vision=vision), BudgetedContext(context_budget, timing), llm, FrameTrace(name="after_llm", timing=timing), RobinIntentReply(robin_request), ReplyGuard(is_silenced=lambda: scene.encounter.silenced, record=recorder.event),
-                                 AutomaticSoundDirector(performance), RecordingTap(recorder, "reply"), current_quips, LocalTTS(engine, timing=timing), RobinSkitPlayback(robin_skit, interaction, mark=timing.mark, video_enabled=video_enabled), SoundEffectPlayback(sound_bank, interaction, mark=timing.mark, performance=performance), FrameTrace(name="after_tts", timing=timing), transport.output(), pair.assistant()])
+            pipeline = Pipeline([transport.input(), stt, RecordingTap(recorder, "input"), FrameTrace(name="after_stt", timing=timing), VisitorControl(interaction), pair.user(), ProactiveTurn(interaction, context, vision=vision, quips=quips), robin_request, SoundEffectRequest(sound_bank, interaction, mark=timing.mark, name_provider=lambda: settings.read()['character_name'], performance=performance, enabled=lambda: skill_store.enabled('sound-effects')), VisualReaction(interaction, mark=timing.mark), HearingRepair(name=active()['character_profile']['defaults']['character_name'], mark=timing.mark, name_provider=lambda: settings.read()['character_name']), PreparedConversation(interaction, mark=timing.mark, name_provider=lambda: settings.read()['character_name'], enabled=skill_store.enabled), FrameTrace(name="before_llm", scene=scene, timing=timing, vision=vision), BudgetedContext(context_budget, timing), llm, FrameTrace(name="after_llm", timing=timing), RobinIntentReply(robin_request), ReplyGuard(is_silenced=lambda: scene.encounter.silenced, record=recorder.event),
+                                 AutomaticSoundDirector(performance), RecordingTap(recorder, "reply"), current_quips, LocalTTS(engine, timing=timing), KioskPlayback(interaction, mark=timing.mark), RobinSkitPlayback(robin_skit, interaction, mark=timing.mark, video_enabled=video_enabled), SoundEffectPlayback(sound_bank, interaction, mark=timing.mark, performance=performance), FrameTrace(name="after_tts", timing=timing), transport.output(), pair.assistant()])
             # Visitor encounters can be separated by long quiet periods.
             # Socket disconnect/app lifecycle still cancels this worker.
             task = PipelineTask(pipeline, params=PipelineParams(), enable_rtvi=False,
@@ -247,6 +296,7 @@ def create_app(token, engine=None):
                 logger.warning('Voice session failed; connection closed')
                 await ws.close(code=1011)
             finally:
+                probes.cancel()
                 current_interaction = None
                 current_task = None
                 current_quips = None
@@ -290,9 +340,14 @@ def main():
     parser.add_argument('--port', type=int, default=8765)
     parser.add_argument('--cert')
     parser.add_argument('--key')
+    parser.add_argument('--allow-private-lan', action='store_true',
+                        help='Opt in to unencrypted pairing/audio on a trusted private IPv4 LAN only')
     args = parser.parse_args()
-    if args.host not in ('127.0.0.1','::1','localhost') and not (args.cert and args.key):
-        parser.error('LAN listening requires --cert and --key')
+    from server.network import validate_bind
+    try:
+        validate_bind(args.host, args.cert, args.key, args.allow_private_lan)
+    except ValueError as error:
+        parser.error(str(error))
     # Disable library debug logs which include transcriptions and model messages.
     logger.remove()
     logger.add(sys.stderr, level='WARNING')

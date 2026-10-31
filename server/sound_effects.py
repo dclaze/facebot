@@ -74,11 +74,12 @@ class SoundEffectFrame(DataFrame):
 
 
 class SoundEffectRequest(FrameProcessor):
-    def __init__(self, bank, state, mark=None, name_provider=lambda:'Boo', performance=None):
+    def __init__(self, bank, state, mark=None, name_provider=lambda:'Boo', performance=None, enabled=lambda: True):
         super().__init__()
         self.bank, self.state, self.mark, self.name_provider = bank, state, mark, name_provider
         self.next_variant = {}
         self.performance=performance
+        self.enabled=enabled
 
     async def process_frame(self, frame, direction):
         await super().process_frame(frame,direction)
@@ -92,7 +93,7 @@ class SoundEffectRequest(FrameProcessor):
                 command=' '.join(re.sub(r'[,!?.]',' ',text.casefold()).split())
                 if command in ('no sound effects','stop sound effects','turn off sound effects','turn on sound effects','use sound effects again'):
                     enabled=command in ('turn on sound effects','use sound effects again')
-                    self.performance.enabled=enabled and self.performance.config is not None
+                    self.performance.enabled=enabled and self.performance.config is not None and self.enabled()
                     self.performance.direct()
                     if not self.state.scene.encounter.silenced:
                         if self.mark:self.mark('prepared_reply')
@@ -116,6 +117,10 @@ class SoundEffectRequest(FrameProcessor):
                 if self.performance:self.performance.direct()
                 if self.state.scene.encounter.silenced:
                     self.state.response_pending = False
+                    return
+                if not self.enabled():
+                    if self.mark:self.mark('prepared_reply')
+                    await self.push_frame(TTSSpeakFrame('The soundboard is resting tonight.'), direction)
                     return
                 variants = self.bank.effects[effect]
                 index = self.next_variant.get(effect,0)

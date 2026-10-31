@@ -15,18 +15,30 @@ from pipecat.serializers.base_serializer import FrameSerializer
 MAX_OUTPUT_PCM_BYTES = 7680
 
 class FaceSerializer(FrameSerializer):
-    def __init__(self, on_scene=None, recorder=None):
+    def __init__(self, on_scene=None, recorder=None, probes=None):
         super().__init__()
         self.epoch = 0
         self.output_samples = 0
         self.on_scene = on_scene
         self.recorder = recorder
+        self.probes = probes
 
     async def serialize(self, frame):
         if isinstance(frame, InterruptionFrame):
+            if self.probes:
+                self.probes.cancel()
             self.epoch += 1
             self.output_samples = 0
             return json.dumps({'type': 'interrupt', 'epoch': self.epoch})
+        if isinstance(frame, OutputTransportMessageFrame) and frame.message.get('type') == 'playback_probe':
+            import uuid
+            identifier = frame.message.get('id')
+            if not isinstance(identifier, str) or str(uuid.UUID(identifier)) != identifier:
+                raise ValueError('Invalid playback probe')
+            if self.probes:
+                self.probes.sent(identifier, self.epoch, self.output_samples)
+            return json.dumps({'type': 'playback_probe', 'id': identifier,
+                               'epoch': self.epoch, 'offset': self.output_samples})
         if isinstance(frame, OutputTransportMessageFrame) and frame.message.get('type') == 'visemes':
             if 'captions' in frame.message:
                 validate_captions(frame.message['captions'])
@@ -42,6 +54,14 @@ class FaceSerializer(FrameSerializer):
                 raise ValueError('Invalid performance video')
             return json.dumps({'type':'performance_video','id':message['id'],'path':message['path'],
                                'duration_ms':duration,'epoch':self.epoch,'offset':self.output_samples+start})
+        if isinstance(frame, OutputTransportMessageFrame) and frame.message.get('type') == 'performance_face':
+            duration = frame.message.get('duration_samples')
+            if (frame.message.get('name') != 'wolf_eyes' or type(duration) is not int
+                    or not 1 <= duration <= 24000 * 20):
+                raise ValueError('Invalid performance face cue')
+            return json.dumps({'type': 'performance_face', 'name': 'wolf_eyes',
+                               'duration_samples': duration, 'epoch': self.epoch,
+                               'offset': self.output_samples})
         if isinstance(frame, OutputTransportMessageFrame) and frame.message.get('type') == 'expression':
             if not validate_expression(frame.message):
                 raise ValueError('Invalid facial reaction')
@@ -67,6 +87,16 @@ class FaceSerializer(FrameSerializer):
         if len(data) > 256:
             raise ValueError('Control message too large')
         event = json.loads(data)
+        if isinstance(event, dict) and event.get('type') == 'playback_receipt':
+            import uuid
+            if (set(event) != {'type', 'id', 'epoch', 'sample'} or not isinstance(event['id'], str)
+                    or str(uuid.UUID(event['id'])) != event['id']
+                    or type(event['epoch']) is not int or not 0 <= event['epoch'] <= 2**53
+                    or type(event['sample']) is not int or not 0 <= event['sample'] <= 2**53):
+                raise ValueError('Invalid playback receipt')
+            if self.probes:
+                self.probes.receive(event)
+            return None
         if event == {'type': 'interrupt'}:
             return InterruptionFrame()
         if (isinstance(event, dict) and {'type', 'visible_faces', 'age_ms'} <= set(event)

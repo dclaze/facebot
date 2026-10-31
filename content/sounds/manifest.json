@@ -1,0 +1,1166 @@
+{
+  "version": 1,
+  "sample_rate": 24000,
+  "channels": 1,
+  "sample_width": 2,
+  "license": "Per-entry CC-BY-3.0 / CC-BY-4.0 / CC0-1.0; see CREDITS.md",
+  "provenance": "Downloaded creator recordings and designed sound effects; exact credits and transformations in selection.json.",
+  "peak_dbfs": -9,
+  "effects": [
+    {
+      "id": "ghost_01",
+      "effect": "ghost",
+      "category": "spooky",
+      "aliases": [
+        "ghost sound",
+        "ghost noise",
+        "spooky sound",
+        "ghostly sound",
+        "boo"
+      ],
+      "file": "ghost_01.wav",
+      "duration_ms": 2257,
+      "license": "CC0-1.0",
+      "provenance": {
+        "file": "ghost-monster-voice-moaning-growling--qubodup-GhostMoan02.wav",
+        "sha256": "9fa1a4a133bd1d0c45e7a5998c9ea97df455b5ca6f790c0b80e3f43568475bff",
+        "author": "qubodup",
+        "license": "CC0-1.0",
+        "source_page": "https://opengameart.org/content/ghost-monster-voice-moaning-growling",
+        "download": "https://opengameart.org/sites/default/files/qubodup-GhostMoans.zip",
+        "source_container_sha256": "25962d146f4634a93efa7fbfe9cde63f4182189ced6105b4f92f23c65d8c2a43",
+        "original_filename": "qubodup-GhostMoan02.wav",
+        "start_seconds": 0,
+        "end_seconds": 2.3,
+        "speed": 1
+      },
+      "sha256": "36c5ce1ebbacfd846d9939248da11cecaa92b3e6fe51f5be4e5330419f5f4155"
+    },
+    {
+      "id": "ghost_02",
+      "effect": "ghost",
+      "category": "spooky",
+      "aliases": [
+        "ghost sound",
+        "ghost noise",
+        "spooky sound",
+        "ghostly sound",
+        "boo"
+      ],
+      "file": "ghost_02.wav",
+      "duration_ms": 2212,
+      "license": "CC0-1.0",
+      "provenance": {
+        "file": "ghost-monster-voice-moaning-growling--qubodup-GhostMoan04.wav",
+        "sha256": "5c2e1122bbd90f1b9fcf482debab61010e3aa3fd23c3cd29760e36a2d5c0f790",
+        "author": "qubodup",
+        "license": "CC0-1.0",
+        "source_page": "https://opengameart.org/content/ghost-monster-voice-moaning-growling",
+        "download": "https://opengameart.org/sites/default/files/qubodup-GhostMoans.zip",
+        "source_container_sha256": "25962d146f4634a93efa7fbfe9cde63f4182189ced6105b4f92f23c65d8c2a43",
+        "original_filename": "qubodup-GhostMoan04.wav",
+        "start_seconds": 0,
+        "end_seconds": 2.3,
+        "speed": 1
+      },
+      "sha256": "81711aabd1a65a891bf9096dfd2347bce6fb7743217b908b931ac6819528375e"
+    },
+    {
+      "id": "ghost_laugh_01",
+      "effect": "ghost_laugh",
+      "category": "spooky",
+      "aliases": [
+        "ghost laugh",
+        "evil laugh",
+        "spooky laugh",
+        "witch laugh"
+      ],
+      "file": "ghost_laugh_01.wav",
+      "duration_ms": 1161,
+      "license": "CC0-1.0",
+      "provenance": {
+        "file": "witch-cackle--witch_cackle-1_0.ogg",
+        "sha256": "6698c4f70facd5e9b4285ff34897099f70c95a826c6775ba4fba7ef5afbc4caf",
+        "author": "AntumDeluge",
+        "license": "CC0-1.0",
+        "source_page": "https://opengameart.org/content/witch-cackle",
+        "download": "https://opengameart.org/sites/default/files/witch_cackle-1_0.ogg",
+        "source_container_sha256": "6698c4f70facd5e9b4285ff34897099f70c95a826c6775ba4fba7ef5afbc4caf",
+        "original_filename": "witch_cackle-1_0.ogg",
+        "start_seconds": 0,
+        "end_seconds": null,
+        "speed": 1
+      },
+      "sha256": "a78f4fc86f19984f21769e57309c87d068f2471b19b5c94ca645de70655b2fcb"
+    },
+    {
+      "id": "ghost_laugh_02",
+      "effect": "ghost_laugh",
+      "category": "spooky",
+      "aliases": [
+        "ghost laugh",
+        "evil laugh",
+        "spooky laugh",
+        "witch laugh"
+      ],
+      "file": "ghost_laugh_02.wav",
+      "duration_ms": 1262,
+      "license": "CC0-1.0",
+      "provenance": {
+        "file": "witch-cackle--witch_cackle-1_0.ogg",
+        "sha256": "6698c4f70facd5e9b4285ff34897099f70c95a826c6775ba4fba7ef5afbc4caf",
+        "author": "AntumDeluge",
+        "license": "CC0-1.0",
+        "source_page": "https://opengameart.org/content/witch-cackle",
+        "download": "https://opengameart.org/sites/default/files/witch_cackle-1_0.ogg",
+        "source_container_sha256": "6698c4f70facd5e9b4285ff34897099f70c95a826c6775ba4fba7ef5afbc4caf",
+        "original_filename": "witch_cackle-1_0.ogg",
+        "start_seconds": 0,
+        "end_seconds": null,
+        "speed": 0.92
+      },
+      "sha256": "978183fb13a3070c2951eebee205210be19827936cf8c9154ab27ee3c97dea5a"
+    },
+    {
+      "id": "creaky_door_01",
+      "effect": "creaky_door",
+      "category": "spooky",
+      "aliases": [
+        "creaky door",
+        "creaking door",
+        "door creak"
+      ],
+      "file": "creaky_door_01.wav",
+      "duration_ms": 1698,
+      "license": "CC-BY-3.0",
+      "provenance": {
+        "file": "creaky-light-wooden-door--creakylightwoodendoor.wav",
+        "sha256": "9b0a91420015c2ae080ef6fd9a3bf8141dc897b4d05aa6488d4e23c13bae8335",
+        "author": "fractilegames",
+        "license": "CC-BY-3.0",
+        "source_page": "https://opengameart.org/content/creaky-light-wooden-door",
+        "download": "https://opengameart.org/sites/default/files/creakylightwoodendoor.wav",
+        "source_container_sha256": "9b0a91420015c2ae080ef6fd9a3bf8141dc897b4d05aa6488d4e23c13bae8335",
+        "original_filename": "creakylightwoodendoor.wav",
+        "start_seconds": 0,
+        "end_seconds": 1.7,
+        "speed": 1
+      },
+      "sha256": "bc7f61a9e965f89b92f071c385741af0214b9a9afa4242368069052dc67f029c"
+    },
+    {
+      "id": "creaky_door_02",
+      "effect": "creaky_door",
+      "category": "spooky",
+      "aliases": [
+        "creaky door",
+        "creaking door",
+        "door creak"
+      ],
+      "file": "creaky_door_02.wav",
+      "duration_ms": 1548,
+      "license": "CC-BY-3.0",
+      "provenance": {
+        "file": "creaky-light-wooden-door--creakylightwoodendoor.wav",
+        "sha256": "9b0a91420015c2ae080ef6fd9a3bf8141dc897b4d05aa6488d4e23c13bae8335",
+        "author": "fractilegames",
+        "license": "CC-BY-3.0",
+        "source_page": "https://opengameart.org/content/creaky-light-wooden-door",
+        "download": "https://opengameart.org/sites/default/files/creakylightwoodendoor.wav",
+        "source_container_sha256": "9b0a91420015c2ae080ef6fd9a3bf8141dc897b4d05aa6488d4e23c13bae8335",
+        "original_filename": "creakylightwoodendoor.wav",
+        "start_seconds": 3.35,
+        "end_seconds": 4.9,
+        "speed": 1
+      },
+      "sha256": "8ff6ed397cfbd9b3137eddc723d813131437f27d84bccdc00400485a60c3faba"
+    },
+    {
+      "id": "cauldron_01",
+      "effect": "cauldron",
+      "category": "spooky",
+      "aliases": [
+        "cauldron",
+        "bubbling cauldron",
+        "bubbles",
+        "bubbling"
+      ],
+      "file": "cauldron_01.wav",
+      "duration_ms": 2000,
+      "license": "CC0-1.0",
+      "provenance": {
+        "file": "boiling-water-loops--cooking_with_cover_01.ogg",
+        "sha256": "ac5c065ae8f7b8dd660d9705c688dd1eff6ebc4b58dc81f6ca3c6912d8be81a8",
+        "author": "TinyWorlds",
+        "license": "CC0-1.0",
+        "source_page": "https://opengameart.org/content/boiling-water-loops",
+        "download": "https://opengameart.org/sites/default/files/cooking_with_cover_01.ogg",
+        "source_container_sha256": "ac5c065ae8f7b8dd660d9705c688dd1eff6ebc4b58dc81f6ca3c6912d8be81a8",
+        "original_filename": "cooking_with_cover_01.ogg",
+        "start_seconds": 0.3,
+        "end_seconds": 2.3,
+        "speed": 1
+      },
+      "sha256": "88f8f9314efbe5800ed5b3c871d5bb6895d9d0d3fc676532b240855960391c0e"
+    },
+    {
+      "id": "cauldron_02",
+      "effect": "cauldron",
+      "category": "spooky",
+      "aliases": [
+        "cauldron",
+        "bubbling cauldron",
+        "bubbles",
+        "bubbling"
+      ],
+      "file": "cauldron_02.wav",
+      "duration_ms": 2000,
+      "license": "CC0-1.0",
+      "provenance": {
+        "file": "boiling-water-loops--cooking_without_cover_01_0.ogg",
+        "sha256": "fea883de35adef8fefa8840f9460a5a01e43bfc8f61c70dd43d1fcfb8f468bc2",
+        "author": "TinyWorlds",
+        "license": "CC0-1.0",
+        "source_page": "https://opengameart.org/content/boiling-water-loops",
+        "download": "https://opengameart.org/sites/default/files/cooking_without_cover_01_0.ogg",
+        "source_container_sha256": "fea883de35adef8fefa8840f9460a5a01e43bfc8f61c70dd43d1fcfb8f468bc2",
+        "original_filename": "cooking_without_cover_01_0.ogg",
+        "start_seconds": 0.3,
+        "end_seconds": 2.3,
+        "speed": 1
+      },
+      "sha256": "20e8fb040b386c4ab99f2ea19beb028909a8c13fc69be465acfed70f1b98b813"
+    },
+    {
+      "id": "cat_01",
+      "effect": "cat",
+      "category": "creatures",
+      "aliases": [
+        "cat",
+        "meow",
+        "cat meow"
+      ],
+      "file": "cat_01.wav",
+      "duration_ms": 1161,
+      "license": "CC-BY-3.0",
+      "provenance": {
+        "file": "cat-sfx--Cat_1.wav",
+        "sha256": "5c2f2ca3c152602535cba030334c589131d5dae1aa649da135b1bde2fd919a32",
+        "author": "Dan Knoflicek (Macro)",
+        "license": "CC-BY-3.0",
+        "source_page": "https://opengameart.org/content/cat-sfx",
+        "download": "https://opengameart.org/sites/default/files/Cat%201.wav",
+        "source_container_sha256": "5c2f2ca3c152602535cba030334c589131d5dae1aa649da135b1bde2fd919a32",
+        "original_filename": "Cat 1.wav",
+        "start_seconds": 0,
+        "end_seconds": null,
+        "speed": 1
+      },
+      "sha256": "0f57790f3e57f27023e81a6178f4a83191ca745f6d900edb842da82cacbb8ac4"
+    },
+    {
+      "id": "cat_02",
+      "effect": "cat",
+      "category": "creatures",
+      "aliases": [
+        "cat",
+        "meow",
+        "cat meow"
+      ],
+      "file": "cat_02.wav",
+      "duration_ms": 1150,
+      "license": "CC-BY-3.0",
+      "provenance": {
+        "file": "cat-sfx--Cat_2.wav",
+        "sha256": "8991405bc8bd6142ac40807da3a3bffaab9a6dc513f3b54f4c2375b4a5481a01",
+        "author": "Dan Knoflicek (Macro)",
+        "license": "CC-BY-3.0",
+        "source_page": "https://opengameart.org/content/cat-sfx",
+        "download": "https://opengameart.org/sites/default/files/Cat%202.wav",
+        "source_container_sha256": "8991405bc8bd6142ac40807da3a3bffaab9a6dc513f3b54f4c2375b4a5481a01",
+        "original_filename": "Cat 2.wav",
+        "start_seconds": 0,
+        "end_seconds": null,
+        "speed": 1
+      },
+      "sha256": "a4f50c39be765742b9fbf3840ef4dea273ec549791b55c1356a22c86952f686a"
+    },
+    {
+      "id": "fart_01",
+      "effect": "fart",
+      "category": "comic",
+      "aliases": [
+        "fart",
+        "fart noise",
+        "raspberry"
+      ],
+      "file": "fart_01.wav",
+      "duration_ms": 1350,
+      "license": "CC0-1.0",
+      "provenance": {
+        "file": "gastric-distress--gastricdistress_bylfa_0.wav",
+        "sha256": "ba19e9e10e668e15092b1ffff7f8bd0e19fc0a3667b56a586b029ec77df52dba",
+        "author": "LFA",
+        "license": "CC0-1.0",
+        "source_page": "https://opengameart.org/content/gastric-distress",
+        "download": "https://opengameart.org/sites/default/files/gastricdistress_bylfa_0.wav",
+        "source_container_sha256": "ba19e9e10e668e15092b1ffff7f8bd0e19fc0a3667b56a586b029ec77df52dba",
+        "original_filename": "gastricdistress_bylfa_0.wav",
+        "start_seconds": 0,
+        "end_seconds": 1.35,
+        "speed": 1
+      },
+      "sha256": "66b75573a9d15d33c96d92648c740d0fac9b364b997dfd78611b6df35219e9cd"
+    },
+    {
+      "id": "fart_02",
+      "effect": "fart",
+      "category": "comic",
+      "aliases": [
+        "fart",
+        "fart noise",
+        "raspberry"
+      ],
+      "file": "fart_02.wav",
+      "duration_ms": 1600,
+      "license": "CC0-1.0",
+      "provenance": {
+        "file": "gastric-distress--gastricdistress_bylfa_0.wav",
+        "sha256": "ba19e9e10e668e15092b1ffff7f8bd0e19fc0a3667b56a586b029ec77df52dba",
+        "author": "LFA",
+        "license": "CC0-1.0",
+        "source_page": "https://opengameart.org/content/gastric-distress",
+        "download": "https://opengameart.org/sites/default/files/gastricdistress_bylfa_0.wav",
+        "source_container_sha256": "ba19e9e10e668e15092b1ffff7f8bd0e19fc0a3667b56a586b029ec77df52dba",
+        "original_filename": "gastricdistress_bylfa_0.wav",
+        "start_seconds": 2.2,
+        "end_seconds": 3.8,
+        "speed": 1
+      },
+      "sha256": "be51df602eec96c09d3fa8e7dc78e852fed5bdb55964af880e58d64e1bf77a81"
+    },
+    {
+      "id": "boing_01",
+      "effect": "boing",
+      "category": "comic",
+      "aliases": [
+        "boing",
+        "spring",
+        "bounce"
+      ],
+      "file": "boing_01.wav",
+      "duration_ms": 1018,
+      "license": "CC0-1.0",
+      "provenance": {
+        "file": "james-keeble-jaw-harp.mp3",
+        "sha256": "fddae2a175f9edc1986163ca4ad4ec01c08c21da21240c126d6ee3772da07a32",
+        "author": "James.Keeble",
+        "license": "CC0-1.0",
+        "source_page": "https://freesound.org/people/James.Keeble/sounds/431985/",
+        "download": "https://cdn.freesound.org/previews/431/431985_2497716-hq.mp3",
+        "original_filename": "james-keeble-jaw-harp.mp3",
+        "start_seconds": 0,
+        "end_seconds": 1.1,
+        "speed": 1,
+        "source_container_sha256": "fddae2a175f9edc1986163ca4ad4ec01c08c21da21240c126d6ee3772da07a32",
+        "download_format": "Freesound public HQ MP3 preview; original lossless file requires login"
+      },
+      "sha256": "dd81d178c5e5aa211791e6d11042d834485b8bd2afe135fd262f13e3fee9b449"
+    },
+    {
+      "id": "boing_02",
+      "effect": "boing",
+      "category": "comic",
+      "aliases": [
+        "boing",
+        "spring",
+        "bounce"
+      ],
+      "file": "boing_02.wav",
+      "duration_ms": 882,
+      "license": "CC0-1.0",
+      "provenance": {
+        "file": "james-keeble-jaw-harp.mp3",
+        "sha256": "fddae2a175f9edc1986163ca4ad4ec01c08c21da21240c126d6ee3772da07a32",
+        "author": "James.Keeble",
+        "license": "CC0-1.0",
+        "source_page": "https://freesound.org/people/James.Keeble/sounds/431985/",
+        "download": "https://cdn.freesound.org/previews/431/431985_2497716-hq.mp3",
+        "original_filename": "james-keeble-jaw-harp.mp3",
+        "start_seconds": 4.3,
+        "end_seconds": 5.4,
+        "speed": 1,
+        "source_container_sha256": "fddae2a175f9edc1986163ca4ad4ec01c08c21da21240c126d6ee3772da07a32",
+        "download_format": "Freesound public HQ MP3 preview; original lossless file requires login"
+      },
+      "sha256": "ec3015f5dd323193cfba923165c2a24cdfd14373e3705021b7c7354b3362f200"
+    },
+    {
+      "id": "slide_whistle_01",
+      "effect": "slide_whistle",
+      "category": "comic",
+      "aliases": [
+        "slide whistle",
+        "whistle"
+      ],
+      "file": "slide_whistle_01.wav",
+      "duration_ms": 1178,
+      "license": "CC-BY-3.0",
+      "provenance": {
+        "file": "slide-whistle-down--79671__joedeshon__slide-whistle-down-01.wav",
+        "sha256": "3e857b2bf1640d51e1cfe2b5a7967c6087da6f589aead349453e4c7e72ab107d",
+        "author": "Joe DeShon",
+        "license": "CC-BY-3.0",
+        "source_page": "https://opengameart.org/content/slide-whistle-down",
+        "download": "https://opengameart.org/sites/default/files/79671__joedeshon__slide-whistle-down-01.wav",
+        "source_container_sha256": "3e857b2bf1640d51e1cfe2b5a7967c6087da6f589aead349453e4c7e72ab107d",
+        "original_filename": "79671__joedeshon__slide-whistle-down-01.wav",
+        "start_seconds": 0,
+        "end_seconds": null,
+        "speed": 1
+      },
+      "sha256": "b27e0a01552905d5a504f6ada8ed26c927b3604c6563afc9cd92c939908932ae"
+    },
+    {
+      "id": "slide_whistle_02",
+      "effect": "slide_whistle",
+      "category": "comic",
+      "aliases": [
+        "slide whistle",
+        "whistle"
+      ],
+      "file": "slide_whistle_02.wav",
+      "duration_ms": 1253,
+      "license": "CC-BY-3.0",
+      "provenance": {
+        "file": "slide-whistle-down--79671__joedeshon__slide-whistle-down-01.wav",
+        "sha256": "3e857b2bf1640d51e1cfe2b5a7967c6087da6f589aead349453e4c7e72ab107d",
+        "author": "Joe DeShon",
+        "license": "CC-BY-3.0",
+        "source_page": "https://opengameart.org/content/slide-whistle-down",
+        "download": "https://opengameart.org/sites/default/files/79671__joedeshon__slide-whistle-down-01.wav",
+        "source_container_sha256": "3e857b2bf1640d51e1cfe2b5a7967c6087da6f589aead349453e4c7e72ab107d",
+        "original_filename": "79671__joedeshon__slide-whistle-down-01.wav",
+        "start_seconds": 0,
+        "end_seconds": null,
+        "speed": 0.94
+      },
+      "sha256": "960a7174c9a4d73415d0c16f7430f6c1a3e6523eb2ec9bc3bcfa54acd1e89e0f"
+    },
+    {
+      "id": "rimshot_01",
+      "effect": "rimshot",
+      "category": "comic",
+      "aliases": [
+        "rimshot",
+        "rim shot",
+        "badum tss",
+        "ba dum tss"
+      ],
+      "file": "rimshot_01.wav",
+      "duration_ms": 2484,
+      "license": "CC0-1.0",
+      "provenance": {
+        "file": "eggsandwichent-ba-dum-bum.mp3",
+        "sha256": "4256108159d71c116af65d42cccc4f5b4f84202f680c17bca5b7f4891fd1eb7c",
+        "author": "eggsandwichent",
+        "license": "CC0-1.0",
+        "source_page": "https://freesound.org/people/eggsandwichent/sounds/221642/",
+        "download": "https://cdn.freesound.org/previews/221/221642_4123650-hq.mp3",
+        "original_filename": "eggsandwichent-ba-dum-bum.mp3",
+        "start_seconds": 0.35,
+        "end_seconds": 3.35,
+        "speed": 1,
+        "source_container_sha256": "4256108159d71c116af65d42cccc4f5b4f84202f680c17bca5b7f4891fd1eb7c",
+        "download_format": "Freesound public HQ MP3 preview; original lossless file requires login"
+      },
+      "sha256": "0fd47f107aea7dac8c8fd41926090d5a8925aec5f2cf2805a864008ef1e1a38f"
+    },
+    {
+      "id": "rimshot_02",
+      "effect": "rimshot",
+      "category": "comic",
+      "aliases": [
+        "rimshot",
+        "rim shot",
+        "badum tss",
+        "ba dum tss"
+      ],
+      "file": "rimshot_02.wav",
+      "duration_ms": 3629,
+      "license": "CC0-1.0",
+      "provenance": {
+        "file": "eggsandwichent-ba-dum-bum.mp3",
+        "sha256": "4256108159d71c116af65d42cccc4f5b4f84202f680c17bca5b7f4891fd1eb7c",
+        "author": "eggsandwichent",
+        "license": "CC0-1.0",
+        "source_page": "https://freesound.org/people/eggsandwichent/sounds/221642/",
+        "download": "https://cdn.freesound.org/previews/221/221642_4123650-hq.mp3",
+        "original_filename": "eggsandwichent-ba-dum-bum.mp3",
+        "start_seconds": 4.05,
+        "end_seconds": 7.75,
+        "speed": 1,
+        "source_container_sha256": "4256108159d71c116af65d42cccc4f5b4f84202f680c17bca5b7f4891fd1eb7c",
+        "download_format": "Freesound public HQ MP3 preview; original lossless file requires login"
+      },
+      "sha256": "4ef9109d89f28638e43541cb746a972cdf9dc7bbc5029b38da9c28b18c337567"
+    },
+    {
+      "id": "sad_trombone_01",
+      "effect": "sad_trombone",
+      "category": "comic",
+      "aliases": [
+        "sad trombone",
+        "wah wah",
+        "womp womp"
+      ],
+      "file": "sad_trombone_01.wav",
+      "duration_ms": 3430,
+      "license": "CC-BY-4.0",
+      "provenance": {
+        "file": "benboncan-sad-trombone.mp3",
+        "sha256": "3971f1c9c04e54ce41daaec2e0b8a154ee97740d4c261e9a1683592810bf9599",
+        "author": "Benboncan",
+        "license": "CC-BY-4.0",
+        "source_page": "https://freesound.org/people/Benboncan/sounds/73581/",
+        "download": "https://cdn.freesound.org/previews/73/73581_634166-hq.mp3",
+        "original_filename": "benboncan-sad-trombone.mp3",
+        "start_seconds": 0,
+        "end_seconds": null,
+        "speed": 1,
+        "source_container_sha256": "3971f1c9c04e54ce41daaec2e0b8a154ee97740d4c261e9a1683592810bf9599",
+        "download_format": "Freesound public HQ MP3 preview; original lossless file requires login"
+      },
+      "sha256": "2d7fb49c3fb5b02e4588c828395bf10221d72889a66acc0f49c0b670170eec55"
+    },
+    {
+      "id": "sad_trombone_02",
+      "effect": "sad_trombone",
+      "category": "comic",
+      "aliases": [
+        "sad trombone",
+        "wah wah",
+        "womp womp"
+      ],
+      "file": "sad_trombone_02.wav",
+      "duration_ms": 3571,
+      "license": "CC-BY-4.0",
+      "provenance": {
+        "file": "benboncan-sad-trombone.mp3",
+        "sha256": "3971f1c9c04e54ce41daaec2e0b8a154ee97740d4c261e9a1683592810bf9599",
+        "author": "Benboncan",
+        "license": "CC-BY-4.0",
+        "source_page": "https://freesound.org/people/Benboncan/sounds/73581/",
+        "download": "https://cdn.freesound.org/previews/73/73581_634166-hq.mp3",
+        "original_filename": "benboncan-sad-trombone.mp3",
+        "start_seconds": 0,
+        "end_seconds": null,
+        "speed": 0.96,
+        "source_container_sha256": "3971f1c9c04e54ce41daaec2e0b8a154ee97740d4c261e9a1683592810bf9599",
+        "download_format": "Freesound public HQ MP3 preview; original lossless file requires login"
+      },
+      "sha256": "e3719f9b5a924e334fac23d031f9636c77906ba2b6b80a43cda40d2f258cdffc"
+    },
+    {
+      "id": "squeak_01",
+      "effect": "squeak",
+      "category": "comic",
+      "aliases": [
+        "squeak",
+        "rubber duck",
+        "squeaky toy"
+      ],
+      "file": "squeak_01.wav",
+      "duration_ms": 768,
+      "license": "CC0-1.0",
+      "provenance": {
+        "file": "squeak-toy-sounds--squeak_toy_-_squeak1.wav",
+        "sha256": "a89853f355ce7c6c60ee9695f5e725250c6a74f4a177b549afa0a30ff98ff362",
+        "author": "bart",
+        "license": "CC0-1.0",
+        "source_page": "https://opengameart.org/content/squeak-toy-sounds",
+        "download": "https://opengameart.org/sites/default/files/squeak_toy.zip",
+        "source_container_sha256": "3ba6419b05ebf8e0b7dd4395b3c10f26811c037e357143f10a159acdb2dabfb8",
+        "original_filename": "squeak toy - squeak1.wav",
+        "start_seconds": 0,
+        "end_seconds": null,
+        "speed": 1
+      },
+      "sha256": "d5b90d657a007d8fb80f800c838637373a09dafbda67ea62870874681c5046ae"
+    },
+    {
+      "id": "squeak_02",
+      "effect": "squeak",
+      "category": "comic",
+      "aliases": [
+        "squeak",
+        "rubber duck",
+        "squeaky toy"
+      ],
+      "file": "squeak_02.wav",
+      "duration_ms": 845,
+      "license": "CC0-1.0",
+      "provenance": {
+        "file": "squeak-toy-sounds--squeak_toy_-_squeak3.wav",
+        "sha256": "bb51223dc20b0f4e691ce624330747a2c866edaf1150c2cdd2b53280154b7212",
+        "author": "bart",
+        "license": "CC0-1.0",
+        "source_page": "https://opengameart.org/content/squeak-toy-sounds",
+        "download": "https://opengameart.org/sites/default/files/squeak_toy.zip",
+        "source_container_sha256": "3ba6419b05ebf8e0b7dd4395b3c10f26811c037e357143f10a159acdb2dabfb8",
+        "original_filename": "squeak toy - squeak3.wav",
+        "start_seconds": 0,
+        "end_seconds": null,
+        "speed": 1
+      },
+      "sha256": "e0388bef6ba55d4cb451667ad41b59fc5cfcf13ffb32ed68751d3129331b3305"
+    },
+    {
+      "id": "pop_01",
+      "effect": "pop",
+      "category": "comic",
+      "aliases": [
+        "pop",
+        "bubble pop"
+      ],
+      "file": "pop_01.wav",
+      "duration_ms": 60,
+      "license": "CC0-1.0",
+      "provenance": {
+        "file": "ezduzziteh-pop1.wav",
+        "sha256": "758416a61890a61f4e1f00a65531e75e7d867cad1e96392d829860b8aa3a66f6",
+        "author": "EZduzziteh",
+        "license": "CC0-1.0",
+        "source_page": "https://opengameart.org/content/pop-sounds-0",
+        "download": "https://opengameart.org/sites/default/files/pop1.wav",
+        "original_filename": "ezduzziteh-pop1.wav",
+        "start_seconds": 0,
+        "end_seconds": null,
+        "speed": 1,
+        "source_container_sha256": "758416a61890a61f4e1f00a65531e75e7d867cad1e96392d829860b8aa3a66f6"
+      },
+      "sha256": "43fc77c55d0fe397cec1212cdbd3d4ea2e8523986cec913d42b6ca37ec5e57ae"
+    },
+    {
+      "id": "pop_02",
+      "effect": "pop",
+      "category": "comic",
+      "aliases": [
+        "pop",
+        "bubble pop"
+      ],
+      "file": "pop_02.wav",
+      "duration_ms": 75,
+      "license": "CC0-1.0",
+      "provenance": {
+        "file": "ezduzziteh-pop2.wav",
+        "sha256": "4d3ab0324964adfcddca88c9f7340497e6dbe1ab30e7df474022e50a025ff5ba",
+        "author": "EZduzziteh",
+        "license": "CC0-1.0",
+        "source_page": "https://opengameart.org/content/pop-sounds-0",
+        "download": "https://opengameart.org/sites/default/files/pop2.wav",
+        "original_filename": "ezduzziteh-pop2.wav",
+        "start_seconds": 0,
+        "end_seconds": null,
+        "speed": 1,
+        "source_container_sha256": "4d3ab0324964adfcddca88c9f7340497e6dbe1ab30e7df474022e50a025ff5ba"
+      },
+      "sha256": "df368bb0761b5688a98a0e7157fea7901feeb3ea959b6043da0baf389907c551"
+    },
+    {
+      "id": "drumroll_01",
+      "effect": "drumroll",
+      "category": "percussion",
+      "aliases": [
+        "drumroll",
+        "drum roll"
+      ],
+      "file": "drumroll_01.wav",
+      "duration_ms": 4414,
+      "license": "CC0-1.0",
+      "provenance": {
+        "file": "bigjoedrummer-buzz-roll.mp3",
+        "sha256": "d9fea06e7a203884dbabdf1e12cca0ff580335eb657236412024359c5b0e2c5a",
+        "author": "bigjoedrummer",
+        "license": "CC0-1.0",
+        "source_page": "https://freesound.org/people/bigjoedrummer/sounds/111653/",
+        "download": "https://cdn.freesound.org/previews/111/111653_1105584-hq.mp3",
+        "original_filename": "bigjoedrummer-buzz-roll.mp3",
+        "start_seconds": 0,
+        "end_seconds": 4.7,
+        "speed": 1,
+        "source_container_sha256": "d9fea06e7a203884dbabdf1e12cca0ff580335eb657236412024359c5b0e2c5a",
+        "download_format": "Freesound public HQ MP3 preview; original lossless file requires login"
+      },
+      "sha256": "f80ab66dcb3bf54ed46043fd61ca04d007ba6cb09ccc81ae7e996eec1a57b950"
+    },
+    {
+      "id": "drumroll_02",
+      "effect": "drumroll",
+      "category": "percussion",
+      "aliases": [
+        "drumroll",
+        "drum roll"
+      ],
+      "file": "drumroll_02.wav",
+      "duration_ms": 4509,
+      "license": "CC0-1.0",
+      "provenance": {
+        "file": "bigjoedrummer-buzz-roll.mp3",
+        "sha256": "d9fea06e7a203884dbabdf1e12cca0ff580335eb657236412024359c5b0e2c5a",
+        "author": "bigjoedrummer",
+        "license": "CC0-1.0",
+        "source_page": "https://freesound.org/people/bigjoedrummer/sounds/111653/",
+        "download": "https://cdn.freesound.org/previews/111/111653_1105584-hq.mp3",
+        "original_filename": "bigjoedrummer-buzz-roll.mp3",
+        "start_seconds": 5,
+        "end_seconds": 9.65,
+        "speed": 1,
+        "source_container_sha256": "d9fea06e7a203884dbabdf1e12cca0ff580335eb657236412024359c5b0e2c5a",
+        "download_format": "Freesound public HQ MP3 preview; original lossless file requires login"
+      },
+      "sha256": "ad7c5b1eff2b677ddeb4896219a352e918ac094c3963b4c08ebe0715cb069c85"
+    },
+    {
+      "id": "heartbeat_01",
+      "effect": "heartbeat",
+      "category": "percussion",
+      "aliases": [
+        "heartbeat",
+        "heart beat"
+      ],
+      "file": "heartbeat_01.wav",
+      "duration_ms": 1696,
+      "license": "CC0-1.0",
+      "provenance": {
+        "file": "oga-heartbeat.flac",
+        "sha256": "7fe0850daa5c92c6a204fbb0a719ee8f8d2979e3416033d796abd6e30f3c118a",
+        "author": "Independent.nu (submitted by qubodup)",
+        "license": "CC0-1.0",
+        "source_page": "https://opengameart.org/content/heartbeat-single-sound",
+        "download": "https://opengameart.org/sites/default/files/heartbeat.mp3_.flac",
+        "original_filename": "oga-heartbeat.flac",
+        "start_seconds": 0,
+        "end_seconds": 1.7,
+        "speed": 1,
+        "source_container_sha256": "7fe0850daa5c92c6a204fbb0a719ee8f8d2979e3416033d796abd6e30f3c118a"
+      },
+      "sha256": "61b22b0f8ce173ae69a4df0adc1955983c2893a0a959887ea3d6fc106cbf5cc6"
+    },
+    {
+      "id": "heartbeat_02",
+      "effect": "heartbeat",
+      "category": "percussion",
+      "aliases": [
+        "heartbeat",
+        "heart beat"
+      ],
+      "file": "heartbeat_02.wav",
+      "duration_ms": 1843,
+      "license": "CC0-1.0",
+      "provenance": {
+        "file": "oga-heartbeat.flac",
+        "sha256": "7fe0850daa5c92c6a204fbb0a719ee8f8d2979e3416033d796abd6e30f3c118a",
+        "author": "Independent.nu (submitted by qubodup)",
+        "license": "CC0-1.0",
+        "source_page": "https://opengameart.org/content/heartbeat-single-sound",
+        "download": "https://opengameart.org/sites/default/files/heartbeat.mp3_.flac",
+        "original_filename": "oga-heartbeat.flac",
+        "start_seconds": 0,
+        "end_seconds": 1.7,
+        "speed": 0.92,
+        "source_container_sha256": "7fe0850daa5c92c6a204fbb0a719ee8f8d2979e3416033d796abd6e30f3c118a"
+      },
+      "sha256": "6d77ac526ebbee24f92adcf7afa8a7a745c6da30b9aebbd3169060a4b3862aa5"
+    },
+    {
+      "id": "bell_01",
+      "effect": "bell",
+      "category": "percussion",
+      "aliases": [
+        "bell",
+        "ding",
+        "chime"
+      ],
+      "file": "bell_01.wav",
+      "duration_ms": 4192,
+      "license": "CC0-1.0",
+      "provenance": {
+        "file": "chrisgrundlingh-desk-bell.mp3",
+        "sha256": "47deaca693beedc2c6e6a02e81170ba1c87c9c0bdabac196fa23515372faa533",
+        "author": "ChrisGrundlingh",
+        "license": "CC0-1.0",
+        "source_page": "https://freesound.org/people/ChrisGrundlingh/sounds/765637/",
+        "download": "https://cdn.freesound.org/previews/765/765637_15688696-hq.mp3",
+        "original_filename": "chrisgrundlingh-desk-bell.mp3",
+        "start_seconds": 6.2,
+        "end_seconds": 10.4,
+        "speed": 1,
+        "source_container_sha256": "47deaca693beedc2c6e6a02e81170ba1c87c9c0bdabac196fa23515372faa533",
+        "download_format": "Freesound public HQ MP3 preview; original lossless file requires login"
+      },
+      "sha256": "4baeaa60320aef3f16b9677645ea03f021483ab659cdf5642f7436b803315910"
+    },
+    {
+      "id": "bell_02",
+      "effect": "bell",
+      "category": "percussion",
+      "aliases": [
+        "bell",
+        "ding",
+        "chime"
+      ],
+      "file": "bell_02.wav",
+      "duration_ms": 3892,
+      "license": "CC0-1.0",
+      "provenance": {
+        "file": "chrisgrundlingh-desk-bell.mp3",
+        "sha256": "47deaca693beedc2c6e6a02e81170ba1c87c9c0bdabac196fa23515372faa533",
+        "author": "ChrisGrundlingh",
+        "license": "CC0-1.0",
+        "source_page": "https://freesound.org/people/ChrisGrundlingh/sounds/765637/",
+        "download": "https://cdn.freesound.org/previews/765/765637_15688696-hq.mp3",
+        "original_filename": "chrisgrundlingh-desk-bell.mp3",
+        "start_seconds": 11.85,
+        "end_seconds": 15.9,
+        "speed": 1,
+        "source_container_sha256": "47deaca693beedc2c6e6a02e81170ba1c87c9c0bdabac196fa23515372faa533",
+        "download_format": "Freesound public HQ MP3 preview; original lossless file requires login"
+      },
+      "sha256": "4a114e180cfff7fee4135474ee537d667c01bb2f2fb3e5d8eded0999adc6030e"
+    },
+    {
+      "id": "robot_01",
+      "effect": "robot",
+      "category": "arcade",
+      "aliases": [
+        "robot",
+        "robot beep",
+        "beep",
+        "bleep"
+      ],
+      "file": "robot_01.wav",
+      "duration_ms": 1800,
+      "license": "CC0-1.0",
+      "provenance": {
+        "file": "kenney-sci-fi-computerNoise_000.ogg",
+        "sha256": "1527944e16eb14b48ee03fe3e7ce6aae94262833a4e1f83928d451a7414fe4e1",
+        "author": "Kenney (Kenney Vleugels)",
+        "license": "CC0-1.0",
+        "source_page": "https://kenney.nl/assets/sci-fi-sounds",
+        "download": "https://kenney.nl/media/pages/assets/sci-fi-sounds/6b296f9ecf-1677589334/kenney_sci-fi-sounds.zip",
+        "original_filename": "Audio/computerNoise_000.ogg",
+        "start_seconds": 0,
+        "end_seconds": 1.8,
+        "speed": 1,
+        "source_container_sha256": "119340f351a5098ad814f78719438c0da355a9ce8a4c8a3af6a8d48aa3d49e04",
+        "kind": "creator-designed electronic effect"
+      },
+      "sha256": "dd1f6202ca80360c7e55b7f2c5ba1a8f6939f9693b182816cfed83ae0e38b9b9"
+    },
+    {
+      "id": "robot_02",
+      "effect": "robot",
+      "category": "arcade",
+      "aliases": [
+        "robot",
+        "robot beep",
+        "beep",
+        "bleep"
+      ],
+      "file": "robot_02.wav",
+      "duration_ms": 1800,
+      "license": "CC0-1.0",
+      "provenance": {
+        "file": "kenney-sci-fi-computerNoise_001.ogg",
+        "sha256": "29b4842f6d8c0ba2b0cb00bfaff3b852b492bb43197a82e697917aacbe106757",
+        "author": "Kenney (Kenney Vleugels)",
+        "license": "CC0-1.0",
+        "source_page": "https://kenney.nl/assets/sci-fi-sounds",
+        "download": "https://kenney.nl/media/pages/assets/sci-fi-sounds/6b296f9ecf-1677589334/kenney_sci-fi-sounds.zip",
+        "original_filename": "Audio/computerNoise_001.ogg",
+        "start_seconds": 0,
+        "end_seconds": 1.8,
+        "speed": 1,
+        "source_container_sha256": "119340f351a5098ad814f78719438c0da355a9ce8a4c8a3af6a8d48aa3d49e04",
+        "kind": "creator-designed electronic effect"
+      },
+      "sha256": "580c99d20c5beb3e11e419aebc1e77dd50c02bad63ed8331d6c3735f41669877"
+    },
+    {
+      "id": "laser_01",
+      "effect": "laser",
+      "category": "arcade",
+      "aliases": [
+        "laser",
+        "pew pew",
+        "zap"
+      ],
+      "file": "laser_01.wav",
+      "duration_ms": 235,
+      "license": "CC0-1.0",
+      "provenance": {
+        "file": "kenney-sci-fi-laserRetro_000.ogg",
+        "sha256": "2a203a007d24cc7e607eb8bec1d86bedba7f551911217ce2c4c1f31393aed32c",
+        "author": "Kenney (Kenney Vleugels)",
+        "license": "CC0-1.0",
+        "source_page": "https://kenney.nl/assets/sci-fi-sounds",
+        "download": "https://kenney.nl/media/pages/assets/sci-fi-sounds/6b296f9ecf-1677589334/kenney_sci-fi-sounds.zip",
+        "original_filename": "Audio/laserRetro_000.ogg",
+        "start_seconds": 0,
+        "end_seconds": null,
+        "speed": 1,
+        "source_container_sha256": "119340f351a5098ad814f78719438c0da355a9ce8a4c8a3af6a8d48aa3d49e04",
+        "kind": "creator-designed electronic effect"
+      },
+      "sha256": "04fb6061ea3163a7852c658ce7764405683fe6291e2263e12b15eee6befb7603"
+    },
+    {
+      "id": "laser_02",
+      "effect": "laser",
+      "category": "arcade",
+      "aliases": [
+        "laser",
+        "pew pew",
+        "zap"
+      ],
+      "file": "laser_02.wav",
+      "duration_ms": 236,
+      "license": "CC0-1.0",
+      "provenance": {
+        "file": "kenney-sci-fi-laserRetro_001.ogg",
+        "sha256": "a0a99efaa755594982d5dfebf3d9cecaed5249bdf1f0de29cf26ca9ea24c191a",
+        "author": "Kenney (Kenney Vleugels)",
+        "license": "CC0-1.0",
+        "source_page": "https://kenney.nl/assets/sci-fi-sounds",
+        "download": "https://kenney.nl/media/pages/assets/sci-fi-sounds/6b296f9ecf-1677589334/kenney_sci-fi-sounds.zip",
+        "original_filename": "Audio/laserRetro_001.ogg",
+        "start_seconds": 0,
+        "end_seconds": null,
+        "speed": 1,
+        "source_container_sha256": "119340f351a5098ad814f78719438c0da355a9ce8a4c8a3af6a8d48aa3d49e04",
+        "kind": "creator-designed electronic effect"
+      },
+      "sha256": "3bf104e94eb8953a4754b3e137192a230dba3ffeeacc175bed93d1c55474862f"
+    },
+    {
+      "id": "ufo_01",
+      "effect": "ufo",
+      "category": "arcade",
+      "aliases": [
+        "ufo",
+        "spaceship",
+        "flying saucer"
+      ],
+      "file": "ufo_01.wav",
+      "duration_ms": 1800,
+      "license": "CC0-1.0",
+      "provenance": {
+        "file": "kenney-sci-fi-engineCircular_000.ogg",
+        "sha256": "8ab85f9fa85e9e692287f98acb36b9ac3ba15313b007c039055e286b736f4e3a",
+        "author": "Kenney (Kenney Vleugels)",
+        "license": "CC0-1.0",
+        "source_page": "https://kenney.nl/assets/sci-fi-sounds",
+        "download": "https://kenney.nl/media/pages/assets/sci-fi-sounds/6b296f9ecf-1677589334/kenney_sci-fi-sounds.zip",
+        "original_filename": "Audio/engineCircular_000.ogg",
+        "start_seconds": 0,
+        "end_seconds": 1.8,
+        "speed": 1,
+        "source_container_sha256": "119340f351a5098ad814f78719438c0da355a9ce8a4c8a3af6a8d48aa3d49e04",
+        "kind": "creator-designed electronic effect"
+      },
+      "sha256": "8da4c12af53025f82eabfe27847c60d199b2c39e7cc924a82553e90314b1fa76"
+    },
+    {
+      "id": "ufo_02",
+      "effect": "ufo",
+      "category": "arcade",
+      "aliases": [
+        "ufo",
+        "spaceship",
+        "flying saucer"
+      ],
+      "file": "ufo_02.wav",
+      "duration_ms": 1800,
+      "license": "CC0-1.0",
+      "provenance": {
+        "file": "kenney-sci-fi-engineCircular_001.ogg",
+        "sha256": "e1df3a942842a24f7c4056db3177e8008edd73d4f3985fd95f55362bc85058bc",
+        "author": "Kenney (Kenney Vleugels)",
+        "license": "CC0-1.0",
+        "source_page": "https://kenney.nl/assets/sci-fi-sounds",
+        "download": "https://kenney.nl/media/pages/assets/sci-fi-sounds/6b296f9ecf-1677589334/kenney_sci-fi-sounds.zip",
+        "original_filename": "Audio/engineCircular_001.ogg",
+        "start_seconds": 0,
+        "end_seconds": 1.8,
+        "speed": 1,
+        "source_container_sha256": "119340f351a5098ad814f78719438c0da355a9ce8a4c8a3af6a8d48aa3d49e04",
+        "kind": "creator-designed electronic effect"
+      },
+      "sha256": "5e29ad72f85e8309e3f2c9837d45b4bc882681f80d5d51cd7bd88e66bf961498"
+    },
+    {
+      "id": "level_up_01",
+      "effect": "level_up",
+      "category": "arcade",
+      "aliases": [
+        "level up",
+        "power up"
+      ],
+      "file": "level_up_01.wav",
+      "duration_ms": 1019,
+      "license": "CC0-1.0",
+      "provenance": {
+        "file": "kenney-digital-powerUp1.ogg",
+        "sha256": "8c361b624b560c0bc30ea3063b71212bc30caebf425c9df2481c13b25561485c",
+        "author": "Kenney (Kenney Vleugels)",
+        "license": "CC0-1.0",
+        "source_page": "https://kenney.nl/assets/digital-audio",
+        "download": "https://kenney.nl/media/pages/assets/digital-audio/216eac4753-1677590265/kenney_digital-audio.zip",
+        "original_filename": "Audio/powerUp1.ogg",
+        "start_seconds": 0,
+        "end_seconds": null,
+        "speed": 1,
+        "source_container_sha256": "24e6ce28b76a6d8c89cff4d331e0965ff5c3de8a73c612028e9d363cc64e4f06",
+        "kind": "creator-designed electronic effect"
+      },
+      "sha256": "db134f3f1cdd8f7ad87159f281f2326f8a662a3f105df39ac695678f61220ba1"
+    },
+    {
+      "id": "level_up_02",
+      "effect": "level_up",
+      "category": "arcade",
+      "aliases": [
+        "level up",
+        "power up"
+      ],
+      "file": "level_up_02.wav",
+      "duration_ms": 248,
+      "license": "CC0-1.0",
+      "provenance": {
+        "file": "kenney-digital-powerUp2.ogg",
+        "sha256": "83786b43d828a399e14ac20604b63a60ca05385977f5477d00304c2adc696204",
+        "author": "Kenney (Kenney Vleugels)",
+        "license": "CC0-1.0",
+        "source_page": "https://kenney.nl/assets/digital-audio",
+        "download": "https://kenney.nl/media/pages/assets/digital-audio/216eac4753-1677590265/kenney_digital-audio.zip",
+        "original_filename": "Audio/powerUp2.ogg",
+        "start_seconds": 0,
+        "end_seconds": null,
+        "speed": 1,
+        "source_container_sha256": "24e6ce28b76a6d8c89cff4d331e0965ff5c3de8a73c612028e9d363cc64e4f06",
+        "kind": "creator-designed electronic effect"
+      },
+      "sha256": "db8b0e7ecd1ab6cb1f5e4a667c497dead7f561680d1d9b17f59d77dba408205b"
+    },
+    {
+      "id": "coin_01",
+      "effect": "coin",
+      "category": "arcade",
+      "aliases": [
+        "coin",
+        "coin pickup"
+      ],
+      "file": "coin_01.wav",
+      "duration_ms": 409,
+      "license": "CC0-1.0",
+      "provenance": {
+        "file": "kenney-digital-highUp.ogg",
+        "sha256": "cbc1c3c7ccf5d7903818144a4c3f5b2ed2385095792f29d8d7c76360ba4fa559",
+        "author": "Kenney (Kenney Vleugels)",
+        "license": "CC0-1.0",
+        "source_page": "https://kenney.nl/assets/digital-audio",
+        "download": "https://kenney.nl/media/pages/assets/digital-audio/216eac4753-1677590265/kenney_digital-audio.zip",
+        "original_filename": "Audio/highUp.ogg",
+        "start_seconds": 0,
+        "end_seconds": null,
+        "speed": 1,
+        "source_container_sha256": "24e6ce28b76a6d8c89cff4d331e0965ff5c3de8a73c612028e9d363cc64e4f06",
+        "kind": "creator-designed electronic effect"
+      },
+      "sha256": "fca150cd85377160de827d52ce5469e21fc21b15fd398ade765d80d1997dee61"
+    },
+    {
+      "id": "coin_02",
+      "effect": "coin",
+      "category": "arcade",
+      "aliases": [
+        "coin",
+        "coin pickup"
+      ],
+      "file": "coin_02.wav",
+      "duration_ms": 442,
+      "license": "CC0-1.0",
+      "provenance": {
+        "file": "kenney-digital-twoTone1.ogg",
+        "sha256": "8732f14d6398407a8f1df77b986c2099cfd88f6583e1272cb60497cb2fe8da1d",
+        "author": "Kenney (Kenney Vleugels)",
+        "license": "CC0-1.0",
+        "source_page": "https://kenney.nl/assets/digital-audio",
+        "download": "https://kenney.nl/media/pages/assets/digital-audio/216eac4753-1677590265/kenney_digital-audio.zip",
+        "original_filename": "Audio/twoTone1.ogg",
+        "start_seconds": 0,
+        "end_seconds": null,
+        "speed": 1,
+        "source_container_sha256": "24e6ce28b76a6d8c89cff4d331e0965ff5c3de8a73c612028e9d363cc64e4f06",
+        "kind": "creator-designed electronic effect"
+      },
+      "sha256": "19e0fe1d5574aeff70ac6285980086cdef434ce940f748c87431f8f06f5a5f8e"
+    }
+  ],
+  "unavailable_aliases": [
+    "bark",
+    "bat",
+    "bat wings",
+    "belch",
+    "burp",
+    "celebration",
+    "chain rattle",
+    "chains",
+    "clock",
+    "cricket",
+    "crickets",
+    "dog",
+    "dog bark",
+    "door knock",
+    "fanfare",
+    "flapping wings",
+    "footsteps",
+    "frog",
+    "frog croak",
+    "gong",
+    "growl",
+    "hoot",
+    "howl",
+    "knock",
+    "knocking",
+    "magic",
+    "magic sparkle",
+    "magic spell",
+    "monster",
+    "monster growl",
+    "owl",
+    "owl hoot",
+    "rain",
+    "raindrops",
+    "rattling chains",
+    "ribbit",
+    "sparkle",
+    "splash",
+    "spooky wind",
+    "steps",
+    "swoosh",
+    "thunder",
+    "thunder rumble",
+    "tick tock",
+    "ticking",
+    "victory",
+    "water splash",
+    "whoosh",
+    "wind",
+    "wind blowing",
+    "wolf",
+    "wolf howl",
+    "woof"
+  ]
+}
