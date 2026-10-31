@@ -193,7 +193,7 @@ public final class FaceActivity extends ComponentActivity {
         if(face==null) return;
         String status;
         switch(state) {
-            case "Listening": status="Ready to listen.";break;
+            case "Listening": status=outputPlaying() ? "Playing audio." : "Ready to listen.";break;
             case "Quiet mode": status="Quiet mode. Speech output is paused. The microphone remains active for resume.";break;
             case "Muted": status="Microphone paused.";break;
             case "Connecting": status="Connecting to the host.";break;
@@ -208,6 +208,12 @@ public final class FaceActivity extends ComponentActivity {
             accessibilityDescription=description;
             face.setContentDescription(description);
         }
+    }
+    private boolean outputPlaying() {
+        // A ready/Listening callback can arrive while accepted PCM still drains.
+        // Use the same native playback head as performance-face cues, not a timer.
+        VoiceClient.PlaybackPosition position=voice==null ? null : voice.playbackPosition();
+        return position!=null && position.playing;
     }
     private void addQuietControls(FrameLayout scene) {
         float density=getResources().getDisplayMetrics().density;
@@ -449,7 +455,7 @@ public final class FaceActivity extends ComponentActivity {
             paint.setTypeface(android.graphics.Typeface.create("sans-serif-condensed",android.graphics.Typeface.BOLD));
             paint.setTextSize(w*.045f);canvas.drawText(characterName.toUpperCase(java.util.Locale.ROOT),w*.5f,h*.80f,paint);
             paint.setTypeface(android.graphics.Typeface.DEFAULT);paint.setTextSize(w*.031f);paint.setAlpha(190);
-            String visitorState=quietControl.localHold ? "Speech paused · tap Resume" : state.equals("Listening") ? "Say hello" : state.equals("Reconnecting") || state.equals("Connecting") ? "One moment… reconnecting" : state;
+            String visitorState=KioskStatus.visitorText(state,quietControl.localHold,outputPlaying());
             canvas.drawText(previewShape!=null?"SYNTHETIC / "+previewShape:visitorState,w*.5f,h*.85f,paint);paint.setAlpha(255);
             if(endpoint==null) { paint.setTextSize(w*.024f);canvas.drawText("Owner: hold the upper-left corner for 5 seconds",w*.5f,h*.90f,paint); }
             if(diagnostics) { paint.setTextSize(w*.022f);canvas.drawText(visionState,w*.5f,h*.94f,paint); }

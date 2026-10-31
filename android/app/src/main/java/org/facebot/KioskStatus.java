@@ -8,5 +8,11 @@ final class KioskStatus {
         muted=nextMuted;return true;
     }
     String readyText(){return muted ? "Quiet mode" : "Listening";}
+    static String visitorText(String state,boolean localHold,boolean outputPlaying) {
+        if(localHold) return "Speech paused · tap Resume";
+        if(state.equals("Listening")) return outputPlaying ? "Performing" : "Say hello";
+        if(state.equals("Reconnecting") || state.equals("Connecting")) return "One moment… reconnecting";
+        return state;
+    }
     void reset(){muted=false;}
 }
