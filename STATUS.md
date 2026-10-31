@@ -1,3 +1,17 @@
+# Halloween launch and recognition diagnostics — 2026-10-31 UTC
+
+Public artifact milestone **DELIVERED**: [0.2.3 prerelease APK, source and setup guide](https://github.com/dclaze/facebot/releases/tag/v0.2.3-halloween-alpha), exact release source `30a7397`. The installed signed APK is unchanged. Full kiosk acceptance remains **NOT DELIVERED**.
+
+Post-release host diagnostics now separate STT preparation, worker queue, recognizer call and result-selection time without retaining audio or text. The current runtime includes `1796e17`; first controlled readings were 471/140/664 ms inside the recognizer, with queue time below 1 ms. These observations do not reproduce or resolve earlier 4–6 second stalls. A same-process idle probe is in progress; authenticated diagnostics retain the latest 16 timing receipts. The readiness command includes both transcription quality and timing regression tests.
+
+A separately signed, isolated AEC3 lab build passed independent source/native/package review and one actual controlled tablet trial: all three authored phrases (stop, Hello, trick-or-treat) recognized exactly with no extra recognized questions. This does not establish general speech coverage, full-scale limiter behavior or the 250 ms acoustic interruption target. Native stop timing straddles that bound under one onset definition, and overlapping speech/natural gaps prevent a precise acoustic cutoff claim. The public app retains its tested Lenovo half-duplex behavior; no AEC prototype was promoted.
+
+Actual active/idle/restored frames were visually inspected by two reviewers. Settled production presentation is immersive with legible controls and captions. The private 12-hour observers continue, but deliberate lab and host-restart intervals are explicitly recorded: the mixed-runtime stream must not be called uninterrupted public-build endurance. Owner screen lock, final stand/power arrangement, generated audible latency and full-duration acceptance remain open. Exact runtime ownership, process handles and private receipts are in canonical `/Users/mv_server/Development/facebot/STATUS.md`.
+
+The following candidate checkpoint is historical; publication completed afterward.
+
+---
+
 # Halloween 0.2.3 candidate checkpoint — 2026-10-31 UTC
 
 Public distribution scope remains a signed Android APK, Apple Silicon Mac setup guide and free bundled skill packs. Public assets exclude pairing credentials, visitor media and the personal guest performance. Published release is currently v0.2.2-halloween-alpha; the verified 0.2.3 candidate below is being prepared for publication.
