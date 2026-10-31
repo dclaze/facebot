@@ -230,6 +230,9 @@ public final class FaceActivity extends ComponentActivity {
         quietStatus.setTextSize(14);quietStatus.setGravity(Gravity.CENTER);
         quietStatus.setAccessibilityLiveRegion(View.ACCESSIBILITY_LIVE_REGION_POLITE);
         quietPanel.addView(quietStatus);
+        quietPanel.addOnLayoutChangeListener((view,left,top,right,bottom,oldLeft,oldTop,oldRight,oldBottom)-> {
+            if(performanceVideo!=null) performanceVideo.setTopInset(bottom+(int)(16*density));
+        });
         FrameLayout.LayoutParams position=new FrameLayout.LayoutParams(-2,-2,Gravity.TOP|Gravity.CENTER_HORIZONTAL);
         position.topMargin=(int)(24*density);scene.addView(quietPanel,position);
         quietButton.setOnClickListener(v->requestQuiet(true));

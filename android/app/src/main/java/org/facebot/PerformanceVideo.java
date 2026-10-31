@@ -69,6 +69,11 @@ final class PerformanceVideo {
         scene.addView(panel,new FrameLayout.LayoutParams(-1,-1));
         panel.setVisibility(View.INVISIBLE);
     }
+    void setTopInset(int pixels) {
+        FrameLayout.LayoutParams layout=(FrameLayout.LayoutParams)panel.getLayoutParams();
+        if(layout.topMargin==pixels) return;
+        layout.topMargin=pixels;panel.setLayoutParams(layout);
+    }
     boolean isVisible(){return visible;}
     void receive(JSONObject event,String voiceURL,String token,boolean allowPrivateLan) {
         final PerformanceVideoCue next;
