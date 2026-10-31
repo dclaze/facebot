@@ -50,6 +50,22 @@ final class VoiceClient extends WebSocketListener {
         MouthCue(long start,long end,String shape) { this.start=start;this.end=end;this.shape=shape; }
     }
     private volatile WebSocket socket;
+    private volatile boolean localQuiet;
+    private java.util.function.Consumer<Boolean> kioskStateListener=muted -> {};
+    void setKioskStateListener(java.util.function.Consumer<Boolean> listener) { kioskStateListener=listener; }
+    void setLocalQuiet(boolean quiet) {
+        localQuiet=quiet; // Playback admission stops immediately, before asynchronous platform calls.
+        if(closed.get()) return;
+        try { control.execute(() -> {
+            if(closed.get()) return;
+            boolean initialized;
+            synchronized(audioLock) {
+                initialized=player!=null;
+                if(initialized) player.setVolume(quiet ? 0f : 1f);
+            }
+            if(quiet && initialized) flush(epoch);
+        }); } catch(RejectedExecutionException ignored) { /* Closing already silences output. */ }
+    }
     private volatile long epoch = 0;
     private AudioRecord recorder;
     private AudioTrack player;
@@ -144,6 +160,7 @@ final class VoiceClient extends WebSocketListener {
                         .setEncoding(AudioFormat.ENCODING_PCM_16BIT).build()).setBufferSizeInBytes(Math.max(1920,outSize))
                         .setTransferMode(AudioTrack.MODE_STREAM).build();
                     if (player.getState()!=AudioTrack.STATE_INITIALIZED) throw new IllegalStateException();
+                    player.setVolume(localQuiet ? 0f : 1f);
                     player.play();
                 }
                 recorder.startRecording();
@@ -169,7 +186,7 @@ final class VoiceClient extends WebSocketListener {
                     boolean pending=output.queuedBytes()>0 || (player!=null
                         && Integer.toUnsignedLong(player.getPlaybackHeadPosition())<writtenSamples);
                     if(echoControl.silenceCapture(android.os.SystemClock.elapsedRealtime(),pending))
-                        Arrays.fill(pcm,0,n,(byte)0); // Keep capture/VAD timing; never upload our own speaker echo.
+                        Arrays.fill(pcm,0,n,(byte)0); // Keep capture/VAD timing while suppressing speaker leakage.
                 }
                 WebSocket ws=socket;
                 if(ws==null || ws.queueSize()>6400 || !ws.send(ByteString.of(pcm,0,n))) { fail(); break; }
@@ -186,10 +203,10 @@ final class VoiceClient extends WebSocketListener {
                     listener.state(kioskStatus.readyText(),false); continue;
                 }
                 int offset=0;
-                while(offset<p.pcm.length && !closed.get() && p.epoch==epoch) {
+                while(offset<p.pcm.length && !closed.get() && !localQuiet && p.epoch==epoch) {
                     int n;
                     synchronized(audioLock) {
-                        if(player==null || p.epoch!=epoch) break;
+                        if(player==null || localQuiet || p.epoch!=epoch) break;
                         n=player.write(p.pcm,offset,Math.min(960,p.pcm.length-offset),AudioTrack.WRITE_NON_BLOCKING);
                         if(n>0) writtenSamples+=n/2;
                     }
@@ -223,7 +240,7 @@ final class VoiceClient extends WebSocketListener {
         }
     }
     @Override public void onMessage(WebSocket ws, ByteString bytes) {
-        if(closed.get()) return;
+        if(closed.get() || localQuiet) return;
         byte[] message=bytes.toByteArray();
         if(message.length<=8 || message.length>8+PlaybackQueue.MAX_PCM_BYTES || (message.length-8)%2!=0) { fail(); return; }
         long incoming=ByteBuffer.wrap(message,0,8).order(ByteOrder.BIG_ENDIAN).getLong();
@@ -232,7 +249,7 @@ final class VoiceClient extends WebSocketListener {
         boolean accepted;
         synchronized(audioLock) {
             // Flush may have advanced the epoch while this packet was decoded.
-            if(incoming!=epoch || closed.get()) return;
+            if(incoming!=epoch || closed.get() || localQuiet) return;
             accepted=output.offer(incoming,Arrays.copyOfRange(message,8,message.length));
             if(accepted) echoControl.outputActivity(android.os.SystemClock.elapsedRealtime());
         }
@@ -242,7 +259,9 @@ final class VoiceClient extends WebSocketListener {
         if(closed.get()) return;
         try {
             JSONObject event=new JSONObject(message);
-            if(event.getString("type").equals("interrupt")) { expressionUntil=0; flush(event.getLong("epoch")); }
+            String type=event.getString("type");
+            if(localQuiet && !type.equals("interrupt") && !type.equals("kiosk_state")) return;
+            if(type.equals("interrupt")) { expressionUntil=0; flush(event.getLong("epoch")); }
             else if(event.getString("type").equals("performance_video")) {
                 long incoming=event.getLong("epoch");
                 if(incoming<epoch)return;
@@ -255,8 +274,9 @@ final class VoiceClient extends WebSocketListener {
                 if(!(event.get("muted") instanceof Boolean)) return;
                 if(incoming>epoch) flush(incoming);
                 synchronized(audioLock) {
-                    kioskStatus.apply(incoming,epoch,event.getBoolean("muted"));
+                    if(!kioskStatus.apply(incoming,epoch,event.getBoolean("muted"))) return;
                 }
+                kioskStateListener.accept(event.getBoolean("muted"));
                 listener.state(kioskStatus.readyText(),false);
             }
             else if(event.getString("type").equals("playback_probe")) {

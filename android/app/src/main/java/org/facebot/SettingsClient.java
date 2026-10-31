@@ -19,7 +19,7 @@ final class SettingsClient implements AutoCloseable {
     private final Listener listener;
     private final Request request;
     private boolean closed;
-    private Call pending;
+    private Call pending, controlCall;
     private final Runnable refresh = this::fetch;
 
     SettingsClient(Context context, String endpoint, String token, boolean allowPrivateLan, Listener listener) {
@@ -77,9 +77,37 @@ final class SettingsClient implements AutoCloseable {
             main.postDelayed(refresh,2000);
         });
     }
+    void setQuiet(boolean quiet, java.util.function.Consumer<Boolean> complete) {
+        if(closed) { complete.accept(false); return; }
+        Request command=request.newBuilder().url(request.url().newBuilder()
+            .encodedPath(quiet ? "/owner/stop" : "/owner/resume").query(null).build())
+            .post(RequestBody.create(new byte[0],null)).build();
+        controlCall=http.newCall(command);
+        controlCall.enqueue(new Callback() {
+            public void onFailure(Call call,IOException error) { finish(false); }
+            public void onResponse(Call call,Response response) {
+                boolean accepted=false;
+                try(Response r=response) {
+                    if(r.isSuccessful() && r.body()!=null) {
+                        r.body().source().request(257);
+                        byte[] bytes=r.body().source().readByteArray(Math.min(257,r.body().source().getBuffer().size()));
+                        if(bytes.length<=256) {
+                            String status=new JSONObject(new String(bytes,java.nio.charset.StandardCharsets.UTF_8)).optString("status");
+                            accepted=quiet ? status.equals("muted") : status.equals("unmuted") || status.equals("disconnected");
+                        }
+                    }
+                } catch(Exception ignored) { }
+                finish(accepted);
+            }
+            private void finish(boolean accepted) {
+                main.post(() -> { if(!closed) { controlCall=null; complete.accept(accepted); } });
+            }
+        });
+    }
     public void close() {
         closed=true; main.removeCallbacks(refresh);
         if(pending!=null) pending.cancel();
+        if(controlCall!=null) controlCall.cancel();
         http.dispatcher().executorService().shutdown();
         http.connectionPool().evictAll();
     }

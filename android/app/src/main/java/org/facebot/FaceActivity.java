@@ -28,6 +28,12 @@ public final class FaceActivity extends ComponentActivity {
     private VoiceClient voice;
     private PerformanceVideo performanceVideo;
     private SettingsClient settingsClient;
+    private final boolean halfDuplex=EchoControl.needsHalfDuplex(
+        android.os.Build.MANUFACTURER,android.os.Build.MODEL,android.os.Build.VERSION.SDK_INT);
+    private final QuietControlState quietControl=new QuietControlState();
+    private android.widget.LinearLayout quietPanel;
+    private android.widget.Button quietButton,resumeButton;
+    private android.widget.TextView quietStatus;
     private int[] palette={0xFFCEFFEE,0xFF5EEBB8,0xFF09362F,0xFF0C312B,0xFF030F0E};
     private Attention attention;
     private VisionClient vision;
@@ -59,6 +65,7 @@ public final class FaceActivity extends ComponentActivity {
         scene.addView(preview, new FrameLayout.LayoutParams(-1,-1));
         scene.addView(face, new FrameLayout.LayoutParams(-1,-1));
         performanceVideo = new PerformanceVideo(this,scene,()->voice==null?null:voice.playbackPosition());
+        if(halfDuplex) addQuietControls(scene);
         setContentView(scene);
         pairing=getSharedPreferences("owner-pairing",MODE_PRIVATE);
         endpoint=pairing.getString("url",null); token=pairing.getString("token",null);
@@ -104,13 +111,14 @@ public final class FaceActivity extends ComponentActivity {
                 characterName=name; palette=colors; refreshAccessibility();
             }); } catch(IllegalArgumentException ignored) { }
         }
-        startAttention();
+        startAttention(); refreshQuietControls();
     }
     @Override protected void onPause() {
         resumed = false; stopConnections();
         super.onPause();
     }
     private void stopConnections() {
+        quietControl.cancelPending();
         connectionGeneration++; main.removeCallbacks(reconnect); main.removeCallbacks(ownerHold);
         if (voice != null) { voice.close(); voice = null; }
         if (vision != null) { vision.close(); vision = null; }
@@ -162,13 +170,22 @@ public final class FaceActivity extends ComponentActivity {
                 main.removeCallbacks(reconnect); main.postDelayed(reconnect, ConnectionPolicy.retryDelay(++failures));
             }
         }));
+        voice.setLocalQuiet(quietControl.localHold);
+        voice.setKioskStateListener(muted -> main.post(() -> {
+            if(!resumed || generation!=connectionGeneration) return;
+            boolean wasHeld=quietControl.localHold;
+            quietControl.serverState(muted);
+            if(wasHeld!=quietControl.localHold && voice!=null) voice.setLocalQuiet(quietControl.localHold);
+            refreshQuietControls();
+        }));
         voice.setVideoListener(event -> main.post(() -> {
-            if(resumed && generation==connectionGeneration && performanceVideo!=null)
+            if(resumed && generation==connectionGeneration && !quietControl.localHold && performanceVideo!=null)
                 performanceVideo.receive(event,endpoint,token,allowPrivateLan);
         }));
         voice.connect(endpoint, token,allowPrivateLan);
     }
     private void refreshAccessibility() {
+        refreshQuietControls();
         if(face==null) return;
         String status;
         switch(state) {
@@ -186,6 +203,53 @@ public final class FaceActivity extends ComponentActivity {
             accessibilityDescription=description;
             face.setContentDescription(description);
         }
+    }
+    private void addQuietControls(FrameLayout scene) {
+        float density=getResources().getDisplayMetrics().density;
+        quietPanel=new android.widget.LinearLayout(this);
+        quietPanel.setOrientation(android.widget.LinearLayout.VERTICAL);
+        quietPanel.setGravity(Gravity.CENTER);
+        android.widget.LinearLayout row=new android.widget.LinearLayout(this);
+        quietButton=new android.widget.Button(this); quietButton.setText("Quiet");
+        quietButton.setContentDescription("Quiet: stop speech immediately");
+        resumeButton=new android.widget.Button(this); resumeButton.setText("Resume");
+        resumeButton.setContentDescription("Resume speech");
+        for(android.widget.Button button:new android.widget.Button[]{quietButton,resumeButton}) {
+            button.setAllCaps(false);button.setTextColor(0xFFCEFFEE);
+            button.setBackgroundTintList(android.content.res.ColorStateList.valueOf(0xEE09362F));
+            row.addView(button,new android.widget.LinearLayout.LayoutParams((int)(112*density),(int)(56*density)));
+        }
+        quietPanel.addView(row);
+        quietStatus=new android.widget.TextView(this);quietStatus.setTextColor(0xFFCEFFEE);
+        quietStatus.setTextSize(14);quietStatus.setGravity(Gravity.CENTER);
+        quietStatus.setAccessibilityLiveRegion(View.ACCESSIBILITY_LIVE_REGION_POLITE);
+        quietPanel.addView(quietStatus);
+        FrameLayout.LayoutParams position=new FrameLayout.LayoutParams(-2,-2,Gravity.TOP|Gravity.CENTER_HORIZONTAL);
+        position.topMargin=(int)(24*density);scene.addView(quietPanel,position);
+        quietButton.setOnClickListener(v->requestQuiet(true));
+        resumeButton.setOnClickListener(v->requestQuiet(false));
+    }
+    private void refreshQuietControls() {
+        if(quietPanel==null) return;
+        quietPanel.setVisibility(endpoint==null ? View.GONE : View.VISIBLE);
+        boolean enabled=resumed && settingsClient!=null && !quietControl.pending;
+        quietButton.setEnabled(enabled);resumeButton.setEnabled(enabled);
+        String text=quietControl.status();
+        if(!text.contentEquals(quietStatus.getText())) quietStatus.setText(text);
+    }
+    private void requestQuiet(boolean quiet) {
+        if(!resumed || settingsClient==null || quietControl.pending) return;
+        int request=quietControl.begin(quiet);
+        if(quiet) {
+            if(voice!=null) voice.setLocalQuiet(true);
+            if(performanceVideo!=null) performanceVideo.clear();
+        }
+        refreshQuietControls();
+        settingsClient.setQuiet(quiet,success -> {
+            if(!quietControl.complete(request,success)) return;
+            if(voice!=null) voice.setLocalQuiet(quietControl.localHold);
+            refreshQuietControls();
+        });
     }
     private void authenticateOwner() {
         if(ownerDialog || !resumed) return;
