@@ -1,0 +1,322 @@
+#!/usr/bin/env python3
+"""Model-free Facebot process supervision and macOS user LaunchAgent management."""
+import argparse
+import fcntl
+import json
+import ipaddress
+import logging
+from logging.handlers import RotatingFileHandler
+import os
+from pathlib import Path
+import plistlib
+import signal
+import socket
+import subprocess
+import sys
+import threading
+import time
+import urllib.request
+
+LABEL = 'org.facebot.kiosk'
+DEFAULT_STATE = Path.home() / 'Library/Application Support/Facebot/kiosk'
+# Shared across release trees and state directories: never run two local kiosks.
+LOCK = Path.home() / 'Library/Application Support/Facebot/kiosk-owner.lock'
+
+
+def atomic_json(path, value):
+    temp = path.with_suffix('.tmp')
+    with temp.open('w') as stream:
+        os.chmod(temp, 0o600)
+        json.dump(value, stream, indent=2)
+        stream.write('\n')
+    temp.replace(path)
+
+
+def private_lan_host(value):
+    address = ipaddress.ip_address(value)
+    return address.version == 4 and any(address in ipaddress.ip_network(network)
+                                         for network in ('10.0.0.0/8', '172.16.0.0/12', '192.168.0.0/16'))
+
+
+def port_occupied(port, host='127.0.0.1'):
+    with socket.socket() as sock:
+        sock.settimeout(.3)
+        return sock.connect_ex((host, port)) == 0
+
+
+def healthy(config):
+    # No token, remote host, response body or exception is logged.
+    try:
+        opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+        with opener.open(f"http://{config.get('host', '127.0.0.1')}:{config['port']}/health",
+                         timeout=config['health_timeout']) as response:
+            value = json.loads(response.read(65537))
+        return (value.get('status') == 'ready' and
+                value.get('profile') == config['profile'] and
+                value.get('tts', {}).get('backend') == config['tts'])
+    except (OSError, ValueError, AttributeError):
+        return False
+
+
+class Supervisor:
+    def __init__(self, config, state, lock_path=LOCK):
+        self.config, self.state, self.lock_path = config, Path(state), Path(lock_path)
+        self.stop_event = threading.Event()
+        self.child = None
+        self.restarts = 0
+        self.logger = logging.getLogger(f'facebot.kiosk.{id(self)}')
+        self.logger.setLevel(logging.INFO)
+        self.logger.propagate = False
+
+    def report(self, phase, **fields):
+        value = dict(phase=phase, supervisor_pid=os.getpid(),
+                     child_pid=self.child.pid if self.child else None,
+                     updated_at=time.time(), restarts=self.restarts,
+                     profile=self.config['profile'], model=self.config['model'],
+                     tts=self.config['tts'], root=self.config['root'],
+                     host=self.config.get('host', '127.0.0.1'), **fields)
+        atomic_json(self.state / 'status.json', value)
+        if phase != 'ready' or fields:
+            self.logger.info('%s', json.dumps(value, sort_keys=True))
+
+    def stop_child(self):
+        if self.child is None:
+            return
+        if self.child.poll() is None:
+            self.child.terminate()
+            try:
+                self.child.wait(timeout=self.config['stop_timeout'])
+            except subprocess.TimeoutExpired:
+                self.child.kill()
+                self.child.wait(timeout=5)
+        self.child = None
+
+    def spawn(self):
+        token = Path(self.config['token_file']).read_text().strip()
+        if len(token) < 24 or '\n' in token:
+            raise ValueError('Invalid token file')
+        env = os.environ.copy()
+        env.update(FACEBOT_TOKEN=token, FACEBOT_PROFILE=self.config['profile'],
+                   FACEBOT_LLM=self.config['model'], FACEBOT_TTS=self.config['tts'],
+                   FACEBOT_SPEECH_RATE=str(self.config['speech_rate']),
+                   FACEBOT_KIOSK_MODE='1')
+        # Same process group intentionally: launchd removes descendants when the
+        # supervisor is killed. Do not set start_new_session or AbandonProcessGroup.
+        self.child = subprocess.Popen(self.config['command'], cwd=self.config['root'],
+                                      env=env, stdin=subprocess.DEVNULL,
+                                      stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        self.report('starting')
+
+    def run(self):
+        self.state.mkdir(parents=True, exist_ok=True, mode=0o700)
+        self.lock_path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+        # Never unlink the lock: replacing its inode lets another owner bypass it.
+        with self.lock_path.open('a') as lock:
+            os.chmod(self.lock_path, 0o600)
+            try:
+                fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except BlockingIOError:
+                return 73
+            handler = RotatingFileHandler(self.state / 'recovery.log',
+                                          maxBytes=262144, backupCount=2)
+            os.chmod(self.state / 'recovery.log', 0o600)
+            self.logger.addHandler(handler)
+            failures = 0
+            try:
+                while not self.stop_event.is_set():
+                    if port_occupied(self.config['port'], self.config.get('host', '127.0.0.1')):
+                        # A manual release or orphan is not ours to kill/adopt.
+                        self.report('port_conflict')
+                        self.stop_event.wait(self.config['backoff_max'])
+                        continue
+                    try:
+                        self.spawn()
+                        born = time.monotonic()
+                        ready_since = None
+                        stable_since = None
+                        misses = 0
+                        reason = 'stopped'
+                        while not self.stop_event.is_set():
+                            if self.child.poll() is not None:
+                                reason = 'child_exit'
+                                break
+                            now = time.monotonic()
+                            if healthy(self.config):
+                                if stable_since is None:
+                                    stable_since = now
+                                if ready_since is None:
+                                    ready_since = now
+                                    self.report('ready', recovered=self.restarts > 0)
+                                else:
+                                    self.report('ready')
+                                misses = 0
+                                if now - stable_since >= self.config['stable_reset']:
+                                    failures = 0
+                            elif ready_since is None:
+                                stable_since = None
+                                if now - born >= self.config['startup_timeout']:
+                                    reason = 'startup_timeout'
+                                    break
+                            else:
+                                stable_since = None
+                                misses += 1
+                                self.report('health_miss', consecutive=misses)
+                                if misses >= self.config['health_failures']:
+                                    reason = 'health_timeout'
+                                    break
+                            self.stop_event.wait(self.config['interval'])
+                        self.stop_child()
+                        if self.stop_event.is_set():
+                            break
+                    except (OSError, ValueError, subprocess.SubprocessError):
+                        # Paths, environment, token and exception strings stay private.
+                        self.stop_child()
+                        reason = 'start_error'
+                    failures += 1
+                    self.restarts += 1
+                    delay = min(self.config['backoff_max'],
+                                self.config['backoff_initial'] * 2 ** min(failures - 1, 16))
+                    self.report('backoff', reason=reason, retry_seconds=delay)
+                    self.stop_event.wait(delay)
+            finally:
+                self.stop_child()
+                self.report('stopped')
+                self.logger.removeHandler(handler)
+                handler.close()
+        return 0
+
+
+def plist_path():
+    return Path.home() / 'Library/LaunchAgents' / (LABEL + '.plist')
+
+
+def launchctl(*args, check=True):
+    return subprocess.run(['/bin/launchctl', *args], check=check,
+                          stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+
+def service_target():
+    return f'gui/{os.getuid()}/{LABEL}'
+
+
+def is_loaded():
+    return launchctl('print', service_target(), check=False).returncode == 0
+
+
+def build_config(args):
+    root = Path(args.root).expanduser().resolve()
+    python = Path(args.python or root / '.venv/bin/python').expanduser().absolute()
+    token = Path(args.token_file or root / '.local/pairing-token').expanduser().resolve()
+    if not (root / 'server/app.py').is_file() or not python.is_file() or not token.is_file():
+        raise ValueError('Root, interpreter and existing pairing-token file must exist')
+    if len(token.read_text().strip()) < 24:
+        raise ValueError('Existing pairing-token file is invalid')
+    sys.path.insert(0, str(root))
+    from server.profiles import load
+    load(args.profile)
+    command = [str(python), '-m', 'server.app', '--host', args.host, '--port', str(args.port)]
+    if args.host != '127.0.0.1':
+        if not args.trusted_lan or not private_lan_host(args.host):
+            raise ValueError('LAN requires --trusted-lan and an explicit RFC1918 IPv4 address')
+        command.append('--allow-private-lan')
+    elif args.trusted_lan:
+        raise ValueError('--trusted-lan requires an explicit private LAN address')
+    return dict(root=str(root), command=command, host=args.host,
+                token_file=str(token), port=args.port, profile=args.profile,
+                model=args.model, tts=args.tts, speech_rate=args.speech_rate,
+                interval=5, health_timeout=2, health_failures=3, startup_timeout=180,
+                stop_timeout=10, backoff_initial=2, backoff_max=60, stable_reset=120)
+
+
+def install(args, state):
+    if is_loaded():
+        raise ValueError('Service already loaded; stop it before changing the release')
+    config = build_config(args)
+    if port_occupied(config['port'], config.get('host', '127.0.0.1')):
+        raise ValueError('Port occupied; the runtime owner must stop the previous server first')
+    if plist_path().exists():
+        raise ValueError('Existing installation; uninstall before replacing its configuration')
+    state.mkdir(parents=True, exist_ok=True, mode=0o700)
+    os.chmod(state, 0o700)
+    atomic_json(state / 'config.json', config)
+    plist = dict(Label=LABEL,
+                 ProgramArguments=[sys.executable, str(Path(__file__).resolve()),
+                                   '--state-dir', str(state), 'run'],
+                 WorkingDirectory=config['root'], RunAtLoad=True, KeepAlive=True,
+                 ThrottleInterval=30, ExitTimeOut=20, AbandonProcessGroup=False,
+                 StandardOutPath='/dev/null', StandardErrorPath='/dev/null',
+                 EnvironmentVariables={'PATH': '/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin',
+                                       'PYTHONUNBUFFERED': '1'})
+    plist_path().parent.mkdir(parents=True, exist_ok=True)
+    with plist_path().open('wb') as stream:
+        os.chmod(plist_path(), 0o600)
+        plistlib.dump(plist, stream)
+    launchctl('bootstrap', f'gui/{os.getuid()}', str(plist_path()))
+    print('Installed and started. Use status to check readiness; login is required after reboot.')
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--state-dir', type=Path, default=DEFAULT_STATE)
+    sub = parser.add_subparsers(dest='action', required=True)
+    setup = sub.add_parser('install')
+    setup.add_argument('--root', default=str(Path(__file__).resolve().parents[1]))
+    setup.add_argument('--python')
+    setup.add_argument('--token-file')
+    setup.add_argument('--profile', required=True)
+    setup.add_argument('--model', required=True, choices=['qwen2.5:1.5b', 'qwen3.5:9b', 'qwen3:1.7b'])
+    setup.add_argument('--tts', required=True, choices=['kokoro', 'qwen3'])
+    setup.add_argument('--speech-rate', type=float, default=1.12)
+    setup.add_argument('--port', type=int, default=8765)
+    setup.add_argument('--host', default='127.0.0.1', help='Loopback or explicit RFC1918 IPv4 address')
+    setup.add_argument('--trusted-lan', action='store_true', help='Opt into unencrypted service on a trusted private LAN')
+    for action in ('run', 'start', 'stop', 'restart', 'status', 'uninstall'):
+        sub.add_parser(action)
+    args = parser.parse_args()
+    state = args.state_dir.expanduser().resolve()
+    if args.action == 'run':
+        os.umask(0o077)
+        supervisor = Supervisor(json.loads((state / 'config.json').read_text()), state)
+        signal.signal(signal.SIGTERM, lambda *_: supervisor.stop_event.set())
+        signal.signal(signal.SIGINT, lambda *_: supervisor.stop_event.set())
+        return supervisor.run()
+    if args.action == 'status':
+        value = json.loads((state / 'status.json').read_text()) if (state / 'status.json').exists() else {'phase': 'never_started'}
+        value['observation_age_seconds'] = round(time.time() - value.get('updated_at', time.time()), 1)
+        value['launchd_loaded'] = is_loaded() if sys.platform == 'darwin' else False
+        config_file = state / 'config.json'
+        value['healthy_now'] = healthy(json.loads(config_file.read_text())) if config_file.exists() else False
+        print(json.dumps(value, indent=2))
+        return 0
+    if sys.platform != 'darwin':
+        parser.error('LaunchAgent commands require macOS; run supports isolated POSIX testing')
+    if args.action == 'install':
+        if not .8 <= args.speech_rate <= 1.3 or not 1 <= args.port <= 65535:
+            parser.error('Speech rate must be 0.8–1.3 and port 1–65535')
+        install(args, state)
+    elif args.action in ('stop', 'uninstall'):
+        if is_loaded():
+            launchctl('bootout', service_target())
+        if args.action == 'uninstall':
+            plist_path().unlink(missing_ok=True)
+            # Retain private configuration and bounded logs for explicit rollback.
+        print('Stopped.' if args.action == 'stop' else 'Uninstalled; private configuration and logs retained.')
+    elif args.action == 'start':
+        if not is_loaded():
+            launchctl('bootstrap', f'gui/{os.getuid()}', str(plist_path()))
+        print('Started; use status to check readiness.')
+    elif args.action == 'restart':
+        # SIGTERM lets the supervisor reap its child before launchd starts again.
+        if is_loaded():
+            launchctl('bootout', service_target())
+        launchctl('bootstrap', f'gui/{os.getuid()}', str(plist_path()))
+        print('Restart requested; use status to check readiness.')
+    return 0
+
+
+if __name__ == '__main__':
+    try:
+        raise SystemExit(main())
+    except (OSError, ValueError, subprocess.SubprocessError):
+        print('Service operation failed. Check paths, configuration, port ownership and launchd status; no secrets logged.', file=sys.stderr)
+        raise SystemExit(1)
