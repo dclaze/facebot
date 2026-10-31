@@ -8,7 +8,7 @@ from pathlib import Path
 
 from server.kiosk_experiences import prepared_texts
 from server.spoken_text import spoken_text
-from server.captions import validate_captions
+from server.captions import validate_captions, CAPTION_PAGINATION_VERSION
 
 
 @lru_cache(maxsize=1)
@@ -24,7 +24,7 @@ class PreparedAudioCache:
         self.hits = self.misses = 0
 
     def key(self, text, voice, speed):
-        return hashlib.sha256(json.dumps([1, self.model, voice, float(speed), text],
+        return hashlib.sha256(json.dumps([1, self.model, voice, float(speed), text, CAPTION_PAGINATION_VERSION],
                                          separators=(',', ':')).encode()).hexdigest()
 
     def get(self, text, voice, speed):
@@ -36,7 +36,8 @@ class PreparedAudioCache:
             if path.stat().st_size > 2_000_000:
                 raise ValueError('Oversized prepared audio')
             value = json.loads(path.read_text())
-            if value['key'] != key or value['version'] != 1:
+            if (value['key'] != key or value['version'] != 1
+                    or value.get('caption_revision') != CAPTION_PAGINATION_VERSION):
                 raise ValueError('Prepared audio identity mismatch')
             result = []
             total = 0
@@ -89,7 +90,7 @@ class PreparedAudioCache:
             if len(files) >= 256 and not path.exists():
                 min(files, key=lambda p: p.stat().st_mtime).unlink()
             temporary = self.root / (key + '.tmp')
-            temporary.write_text(json.dumps({'version': 1, 'key': key, 'segments': rows}, separators=(',', ':')))
+            temporary.write_text(json.dumps({'version': 1, 'key': key, 'caption_revision': CAPTION_PAGINATION_VERSION, 'segments': rows}, separators=(',', ':')))
             temporary.replace(path)
         except OSError:
             pass  # Cache storage failure must not suppress speech.

@@ -35,6 +35,42 @@ class CaptionTests(unittest.TestCase):
         self.assertTrue(all(a[1] == b[0] for a, b in zip(cues, cues[1:])))
         validate_captions(cues)
 
+    def test_joke_sentence_boundary_moves_orphan_with_its_timestamp(self):
+        text = 'Ghosts love elevators. They lift our spirits.'
+        tokens = [SimpleNamespace(text='They', start_ts=1.25),
+                  SimpleNamespace(text='lift', start_ts=1.6)]
+        cues = caption_cues(text, 96000, tokens)
+        self.assertEqual(cues, [[0, 30000, 'Ghosts love elevators.'],
+                                [30000, 96000, 'They lift our spirits.']])
+        fallback = caption_cues(text, 96000)
+        self.assertEqual(fallback[1][0], round(96000 * text.index('They') / len(text)))
+        self.assertEqual(' '.join(c[2] for c in fallback), text)
+
+    def test_two_stranded_words_and_quoted_sentence_move_together(self):
+        text = 'A ghost waved. They both vanished into thin air.'
+        cues = caption_cues(text, 96000)
+        self.assertEqual(cues[0][2], 'A ghost waved.')
+        self.assertTrue(cues[1][2].startswith('They both vanished'))
+        quoted = caption_cues('She said “Boo!” They left in a hurry.', 96000)
+        self.assertEqual(quoted[0][2], 'She said “Boo!”')
+        for sentence, pages in ((text, cues), ('She said “Boo!” They left in a hurry.', quoted)):
+            self.assertEqual(' '.join(c[2] for c in pages), sentence)
+            self.assertTrue(all(len(c[2]) <= 30 and len(c[2].split()) <= 5 for c in pages))
+            self.assertTrue(all(a[1] == b[0] for a,b in zip(pages,pages[1:])))
+            validate_captions(pages)
+
+    def test_short_greetings_abbreviations_and_unpunctuated_text_keep_greedy_fit(self):
+        for text in ('Boo! Happy Halloween!', 'Hello! Welcome, little ghosts!'):
+            self.assertEqual(caption_cues(text, 24000), [[0, 24000, text]])
+        self.assertEqual(caption_cues('Ask Dr. Smith about the spooky elevator', 96000)[0][2],
+                         'Ask Dr. Smith about the')
+        plain = 'One two three four five six seven eight nine ten eleven twelve'
+        cues = caption_cues(plain, 96000)
+        self.assertEqual([c[2] for c in cues], ['One two three four five',
+                                               'six seven eight nine ten', 'eleven twelve'])
+        self.assertEqual(' '.join(c[2] for c in cues), plain)
+        validate_captions(cues)
+
     def test_word_alignment_and_missing_timestamps(self):
         text = 'One two three four five six seven eight nine ten'
         tokens = [SimpleNamespace(text='six', start_ts=1.75)]

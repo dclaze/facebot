@@ -5,6 +5,17 @@ import re
 RATE = 24000
 MAX_SAMPLES = RATE * 120
 MAX_TEXT = 160
+# Part of prepared-audio cache identity: old PCM keeps its old caption sidecar.
+CAPTION_PAGINATION_VERSION = 2
+
+
+def _sentence_end(word):
+    word = word.rstrip('"\'”’)]}')
+    if word.endswith(('!', '?', '…')):
+        return True
+    return (word.endswith('.') and word.count('.') == 1
+            and word.casefold() not in {'mr.', 'mrs.', 'ms.', 'dr.', 'prof.', 'st.', 'jr.', 'sr.', 'vs.', 'etc.'}
+            and not re.fullmatch(r'[A-Z]\.', word))
 
 
 def caption_cues(text, samples, tokens=None):
@@ -23,17 +34,25 @@ def caption_cues(text, samples, tokens=None):
         word = match.group()
         for index in range(0, len(word), 30):
             pieces.append((word[index:index+30], match.start()+index))
-    pages = []
-    current, first = [], 0
-    for word, start in pieces:
-        if current and (len(current) >= 5 or len(' '.join(current)) + 1 + len(word) > 30):
-            pages.append((' '.join(current), first))
-            current = []
-        if not current:
-            first = start
-        current.append(word)
+    pages, current = [], []
+    for piece in pieces:
+        word, start = piece
+        if current and (len(current) >= 5 or len(' '.join(p[0] for p in current)) + 1 + len(word) > 30):
+            split = len(current)
+            # Move one or two stranded words to the next page, retaining their
+            # original text offsets for token/proportional timing. Do this only
+            # on overflow; complete short greetings that fit stay together.
+            for boundary in range(len(current)-1, max(1, len(current)-3), -1):
+                carry = current[boundary:] + [piece]
+                if (_sentence_end(current[boundary-1][0])
+                        and len(' '.join(p[0] for p in carry)) <= 30):
+                    split = boundary
+                    break
+            pages.append((' '.join(p[0] for p in current[:split]), current[0][1]))
+            current = current[split:]
+        current.append(piece)
     if current:
-        pages.append((' '.join(current), first))
+        pages.append((' '.join(p[0] for p in current), current[0][1]))
     if len(pages) > 512 or len(pages) > samples:
         raise ValueError('Caption segment too large')
     # Alignment is optional. Match token spelling against actual segment text;

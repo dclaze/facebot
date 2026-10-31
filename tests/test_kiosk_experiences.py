@@ -170,6 +170,36 @@ class KioskTests(unittest.IsolatedAsyncioTestCase):
                 path.write_text(json.dumps(value))
                 self.assertIsNone(cache.get(text, 'af_heart', 1.05))
 
+    def test_caption_revision_misses_legacy_cache_without_deleting_its_audio(self):
+        import base64
+        import hashlib
+        import json
+        from server.captions import caption_cues, CAPTION_PAGINATION_VERSION
+        with tempfile.TemporaryDirectory() as root:
+            cache = PreparedAudioCache('test', root)
+            text = 'Ghosts love elevators. They lift our spirits.'
+            audio = b'\0\0' * 24000
+            legacy_key = hashlib.sha256(json.dumps([1, 'test', 'af_heart', 1.05, text],
+                                                   separators=(',', ':')).encode()).hexdigest()
+            legacy = {'version': 1, 'key': legacy_key, 'segments': [{
+                'pcm': base64.b64encode(audio).decode('ascii'), 'sha256': hashlib.sha256(audio).hexdigest(),
+                'mouth_cues': [], 'captions': [[0, 15000, 'Ghosts love elevators. They'], [15000, 24000, 'lift our spirits.']]}]}
+            old_path = Path(root) / (legacy_key + '.json')
+            old_path.write_text(json.dumps(legacy))
+            original = old_path.read_bytes()
+            self.assertIsNone(cache.get(text, 'af_heart', 1.05))
+            revised = caption_cues(text, 24000)
+            cache.put(text, 'af_heart', 1.05, [SpeechSegment(audio, [], revised)])
+            self.assertEqual(cache.get(text, 'af_heart', 1.05)[0][2], revised)
+            self.assertEqual(old_path.read_bytes(), original)
+            self.assertEqual(len(list(Path(root).glob('*.json'))), 2)
+            new_path = Path(root) / (cache.key(text, 'af_heart', 1.05) + '.json')
+            value = json.loads(new_path.read_text())
+            self.assertEqual(value['caption_revision'], CAPTION_PAGINATION_VERSION)
+            value['caption_revision'] -= 1
+            new_path.write_text(json.dumps(value))
+            self.assertIsNone(cache.get(text, 'af_heart', 1.05))
+
     def test_cache_preserves_cues_and_voice_rate_identity_without_visitor_storage(self):
         with tempfile.TemporaryDirectory() as root:
             cache = PreparedAudioCache('test', root)
