@@ -3,7 +3,7 @@ import unittest
 from unittest.mock import patch
 import numpy as np
 from pipecat.audio.vad.silero import SileroVADAnalyzer
-from pipecat.audio.vad.vad_analyzer import VADState
+from pipecat.audio.vad.vad_analyzer import VADState, VADAnalyzer
 from server.capture_vad import CaptureVAD, LENOVO_RAW_CAPTURE
 
 
@@ -64,3 +64,51 @@ class CaptureVADTests(unittest.TestCase):
                 pcm=(np.clip(audio,-1,1)*32767).astype('<i2').tobytes()
                 states=[vad._run_analyzer(pcm[offset:offset+640]) for offset in range(0,len(pcm),640)]
                 self.assertNotIn(VADState.SPEAKING,states)
+
+    def test_activity_counts_analysis_and_stable_transitions_without_content(self):
+        vad=CaptureVAD();vad.set_sample_rate(16000)
+        self.addCleanup(vad._executor.shutdown)
+        pcm=bytes(1024)
+        with patch.object(SileroVADAnalyzer,'voice_confidence',return_value=.9), \
+             patch.object(VADAnalyzer,'_get_smoothed_volume',return_value=.8), \
+             patch('server.capture_vad.time.monotonic',return_value=100):
+            for _ in range(3):vad._run_analyzer(pcm)
+        with patch.object(SileroVADAnalyzer,'voice_confidence',return_value=.1), \
+             patch.object(VADAnalyzer,'_get_smoothed_volume',return_value=.2), \
+             patch('server.capture_vad.time.monotonic',return_value=101):
+            vad._run_analyzer(pcm) # STOPPING is not a stop event.
+        with patch.object(SileroVADAnalyzer,'voice_confidence',return_value=.9), \
+             patch.object(VADAnalyzer,'_get_smoothed_volume',return_value=.8):
+            vad._run_analyzer(pcm) # SPEAKING continuation is not a new start.
+        with patch.object(SileroVADAnalyzer,'voice_confidence',return_value=.1), \
+             patch.object(VADAnalyzer,'_get_smoothed_volume',return_value=.2), \
+             patch('server.capture_vad.time.monotonic',return_value=102):
+            for _ in range(14):vad._run_analyzer(pcm)
+        with patch('server.capture_vad.time.monotonic',return_value=103):
+            activity=vad.report()['activity']
+        self.assertEqual(activity['input_samples'],19*512)
+        self.assertEqual(activity['input_frames'],19)
+        self.assertEqual(activity['analysis_frames'],19)
+        self.assertEqual(activity['candidate_frames'],4)
+        self.assertEqual(activity['speech_starts'],1)
+        self.assertEqual(activity['speech_stops'],1)
+        self.assertEqual(activity['last_start_age_s'],3)
+        self.assertEqual(activity['last_stop_age_s'],1)
+        self.assertEqual(activity['state'],'quiet')
+        self.assertEqual(activity['max_confidence'],.9)
+        self.assertEqual(activity['max_volume'],.8)
+        self.assertTrue(all(isinstance(v,(int,float,str,type(None))) for v in activity.values()))
+        activity['speech_starts']=999
+        self.assertEqual(vad.report()['activity']['speech_starts'],1)
+
+    def test_partial_input_is_counted_without_claiming_analysis(self):
+        vad=CaptureVAD();vad.set_sample_rate(16000)
+        self.addCleanup(vad._executor.shutdown)
+        self.assertIsNone(vad.report()['activity']['last_input_age_s'])
+        vad._run_analyzer(bytes(640))
+        activity=vad.report()['activity']
+        self.assertEqual(activity['input_frames'],1)
+        self.assertEqual(activity['input_samples'],320)
+        self.assertEqual(activity['analysis_frames'],0)
+        self.assertEqual(activity['candidate_frames'],0)
+        self.assertIsNone(activity['last_start_age_s'])

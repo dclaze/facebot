@@ -82,3 +82,11 @@ Controlled microphone replay recovered short low-amplitude greetings that the
 unchanged detector missed, while the tested quiet/noise controls stayed quiet.
 This is a bounded replay result, not a general noise-accuracy guarantee. Owner
 `/diagnostics` exposes the effective VAD profile and parameters for verification.
+
+The authenticated VAD report also contains content-free activity counters: input
+frames/samples, analyzed frames, latest and maximum confidence/volume, qualifying
+candidate frames, stable speech starts/stops, and monotonic ages. Compare counters
+before and after a controlled phrase: candidates without a start point to detector
+state/timing; starts without an ASR utterance point downstream. These counters
+retain no PCM or text, reset on voice reconnect, and do not prove acoustic capture
+or recognition. A replay that detects a phrase does not establish live acceptance.
