@@ -14,7 +14,7 @@ import subprocess
 import sys
 
 ROOT = Path(__file__).resolve().parents[1]
-MODELS = ('qwen2.5:1.5b', 'qwen3-vl:2b')
+MODELS = ('qwen2.5:1.5b', 'qwen3-vl:2b-instruct')
 
 
 def find_tool(name):
@@ -93,7 +93,7 @@ async def vision_smoke():
     """
     import httpx
     from PIL import Image
-    from server.vision import ImageLabeler, VisionState, MODEL, OLLAMA_CHAT_URL
+    from server.vision import ImageLabeler, VisionState, MODEL, vision_url
     state = VisionState()
     labeler = ImageLabeler(state)
     image = io.BytesIO()
@@ -116,7 +116,8 @@ async def vision_smoke():
         await labeler.close()
     return {'status': 'ready' if attempts[-1]['status'] == 'accepted' else 'failed',
             'evidence': 'synthetic blank JPEG through actual local model endpoint and runtime schema validator',
-            'endpoint': OLLAMA_CHAT_URL, 'model': MODEL, 'frame_ttl_seconds': state.TTL,
+            'endpoint': vision_url(), 'model': MODEL, 'frame_ttl_seconds': state.TTL,
+            'requires_nonempty_content_without_thinking': True,
             'attempts': attempts, 'visual_recognition_quality_tested': False,
             'microphone_or_camera_used': False}
 

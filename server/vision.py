@@ -7,13 +7,26 @@ import asyncio
 import base64
 import io
 import json
+import os
+import re
 import time
 
 import httpx
 from PIL import Image
 
-MODEL = 'qwen3-vl:2b'
+MODEL = 'qwen3-vl:2b-instruct'
 OLLAMA_CHAT_URL = 'http://127.0.0.1:11434/api/chat'
+
+
+def vision_url():
+    """Only the port of a literal loopback Ollama endpoint is configurable."""
+    value = os.environ.get('FACEBOT_VISION_URL', OLLAMA_CHAT_URL)
+    match = re.fullmatch(r'http://(?:127\.0\.0\.1|\[::1\]):([0-9]{1,5})/api/chat', value)
+    if not match or not 1 <= int(match.group(1)) <= 65535:
+        raise ValueError('FACEBOT_VISION_URL must be an HTTP loopback literal with a valid port and /api/chat path')
+    return value
+
+
 LABELS = (
     'sofa', 'chair', 'table', 'phone', 'remote control', 'blanket', 'window', 'plant', 'book', 'cup', 'bottle', 'dog', 'cat',
     'pumpkin', 'candy bowl', 'bag', 'backpack', 'ball', 'toy',
@@ -149,6 +162,7 @@ class VisionState:
 class ImageLabeler:
     def __init__(self, state):
         self.state = state
+        self.url = vision_url()
         self.client = httpx.AsyncClient(timeout=20, trust_env=False)
         self.busy = asyncio.Lock()
 
@@ -167,7 +181,7 @@ class ImageLabeler:
             return False
         async with self.busy:
             start = self.state.clock()
-            response = await self.client.post(OLLAMA_CHAT_URL, json={
+            response = await self.client.post(self.url, json={
                 'model': MODEL, 'stream': False, 'think': False, 'keep_alive': '10m',
                 'messages': [{'role': 'user', 'content': PROMPT,
                               'images': [base64.b64encode(jpeg).decode('ascii')]}],
@@ -180,7 +194,13 @@ class ImageLabeler:
             self.state.last_reply_shape = {'content_chars': len(message.get('content','')), 'thinking_chars': len(message.get('thinking','')), 'generated_tokens': result.get('eval_count')}
             if result.get('done_reason') == 'length':
                 raise ValueError('Truncated labels')
-            payload = json.loads(result['message']['content'])
+            message = result.get('message')
+            if (not isinstance(message, dict)
+                    or not isinstance(message.get('content'), str)
+                    or not message['content'].strip()
+                    or message.get('thinking', '') != ''):
+                raise ValueError('Expected content-only vision labels without thinking')
+            payload = json.loads(message['content'])
             if set(payload) != {'labels','people'}:
                 raise ValueError('Invalid vision output')
             return self.state.accept(payload['labels'], start-age_ms/1000,
