@@ -41,6 +41,10 @@ python3 scripts/kiosk-service.py install \
 python3 scripts/kiosk-service.py status
 ```
 
+The service also opens owner settings at `http://192.168.1.50:8766/` and the free skill shop at `http://192.168.1.50:8766/store`. By default only the Mac itself may access them. Add `--owner-client YOUR_OWNER_DEVICE_PRIVATE_IP` during installation to authorize a specific owner phone/tablet; this does not enable arbitrary LAN visitors. Owner controls and voice recover independently. `--no-admin` opts out; a separate manually running owner server must be stopped by its owner before adopting supervision.
+
+While the service runs it prevents idle Mac sleep with a scoped `caffeinate` child. It cannot prevent lid closure, explicit sleep, shutdown or power loss. `--no-sleep-protection` opts out; stopping/uninstalling the service removes the sleep assertion. Existing configurations require reinstalling to add these new defaults.
+
 This service persists kiosk mode across restarts. A user LaunchAgent starts **after macOS login**, not before FileVault/login. First startup/prewarm can take time. Require fresh `healthy_now: true` before pairing; then verify the tablet separately. Stop any previous server through its owner before installing: the service refuses to kill an existing listener.
 
 In the tablet's owner connection screen, use `ws://192.168.1.50:8765/voice` with the Mac's private pairing token and explicitly enable the trusted-LAN option. Trusted LAN is unencrypted and appropriate only on an owner-controlled private network. For other networks use a properly trusted TLS setup rather than weakening hostname/certificate validation. Do not send tokens through public chat, pastebins or release issues.
@@ -60,6 +64,14 @@ sys.argv=['server.app', '--host', '192.168.1.50', '--allow-private-lan']
 runpy.run_module('server.app', run_name='__main__')
 PY
 ```
+
+For the manual foreground voice command above, owner controls are a separate optional foreground process:
+
+```sh
+FACEBOT_PROFILE=halloween .venv/bin/python -m server.admin --host 192.168.1.50
+```
+
+Add `--allow-client OWNER_DEVICE_PRIVATE_IP` only for an explicitly authorized owner device. Prefer the supervised installation for automatic recovery and scoped sleep protection.
 
 ## Generate an honest readiness report
 

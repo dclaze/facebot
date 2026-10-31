@@ -48,14 +48,55 @@ def healthy(config):
     # No token, remote host, response body or exception is logged.
     try:
         opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
-        with opener.open(f"http://{config.get('host', '127.0.0.1')}:{config['port']}/health",
+        route = '/api/settings' if config.get('role') == 'admin' else '/health'
+        with opener.open(f"http://{config.get('host', '127.0.0.1')}:{config['port']}{route}",
                          timeout=config['health_timeout']) as response:
             value = json.loads(response.read(65537))
+        if config.get('role') == 'admin':
+            return value.get('profile') == config['profile'] and isinstance(value.get('etag'), str)
         return (value.get('status') == 'ready' and
                 value.get('profile') == config['profile'] and
                 value.get('tts', {}).get('backend') == config['tts'])
     except (OSError, ValueError, AttributeError):
         return False
+
+
+class SleepGuard:
+    """Own one idle-sleep inhibitor; -w also releases it if its parent dies."""
+    def __init__(self, stop_event, logger, command=None):
+        self.stop_event, self.logger = stop_event, logger
+        self.command = command or ['/usr/bin/caffeinate', '-i', '-w', str(os.getpid())]
+        self.process = None
+
+    def active(self):
+        process = self.process
+        return process is not None and process.poll() is None
+
+    def run(self):
+        try:
+            while not self.stop_event.is_set():
+                try:
+                    self.process = subprocess.Popen(self.command, stdin=subprocess.DEVNULL,
+                                                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                    self.logger.info('idle_sleep_protection_started')
+                    while not self.stop_event.wait(.5) and self.process.poll() is None:
+                        pass
+                    if self.process.poll() is not None:
+                        self.process.wait()
+                except OSError:
+                    self.logger.warning('idle_sleep_protection_unavailable')
+                if not self.stop_event.is_set():
+                    self.stop_event.wait(2)
+        finally:
+            if self.process is not None:
+                if self.process.poll() is None:
+                    self.process.terminate()
+                    try:
+                        self.process.wait(timeout=2)
+                    except subprocess.TimeoutExpired:
+                        self.process.kill()
+                        self.process.wait(timeout=2)
+                self.process = None
 
 
 class Supervisor:
@@ -64,6 +105,8 @@ class Supervisor:
         self.stop_event = threading.Event()
         self.child = None
         self.restarts = 0
+        self.admin = self.admin_thread = None
+        self.sleep_guard = self.sleep_thread = None
         self.logger = logging.getLogger(f'facebot.kiosk.{id(self)}')
         self.logger.setLevel(logging.INFO)
         self.logger.propagate = False
@@ -74,7 +117,15 @@ class Supervisor:
                      updated_at=time.time(), restarts=self.restarts,
                      profile=self.config['profile'], model=self.config['model'],
                      tts=self.config['tts'], root=self.config['root'],
-                     host=self.config.get('host', '127.0.0.1'), **fields)
+                     host=self.config.get('host', '127.0.0.1'), role=self.config.get('role', 'voice'), **fields)
+        if self.admin is not None:
+            try:
+                value['admin'] = json.loads((self.state / 'admin/status.json').read_text())
+            except (OSError, ValueError):
+                value['admin'] = {'phase': 'starting'}
+            value['admin']['watchdog_alive'] = self.admin_thread.is_alive()
+        if self.sleep_guard is not None:
+            value['idle_sleep_protected'] = self.sleep_guard.active()
         atomic_json(self.state / 'status.json', value)
         if phase != 'ready' or fields:
             self.logger.info('%s', json.dumps(value, sort_keys=True))
@@ -92,11 +143,15 @@ class Supervisor:
         self.child = None
 
     def spawn(self):
-        token = Path(self.config['token_file']).read_text().strip()
-        if len(token) < 24 or '\n' in token:
-            raise ValueError('Invalid token file')
         env = os.environ.copy()
-        env.update(FACEBOT_TOKEN=token, FACEBOT_PROFILE=self.config['profile'],
+        if self.config.get('role') != 'admin':
+            token = Path(self.config['token_file']).read_text().strip()
+            if len(token) < 24 or '\n' in token:
+                raise ValueError('Invalid token file')
+            env['FACEBOT_TOKEN'] = token
+        else:
+            env.pop('FACEBOT_TOKEN', None)
+        env.update(FACEBOT_PROFILE=self.config['profile'],
                    FACEBOT_LLM=self.config['model'], FACEBOT_TTS=self.config['tts'],
                    FACEBOT_SPEECH_RATE=str(self.config['speech_rate']),
                    FACEBOT_KIOSK_MODE='1')
@@ -106,6 +161,37 @@ class Supervisor:
                                       env=env, stdin=subprocess.DEVNULL,
                                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         self.report('starting')
+
+    def start_support(self):
+        if self.stop_event.is_set():
+            return
+        if self.config.get('admin'):
+            config = {**self.config, **self.config['admin']}
+            config.pop('admin', None)
+            config['prevent_sleep'] = False
+            self.admin = Supervisor(config, self.state / 'admin', self.state / 'admin-owner.lock')
+            self.admin_thread = threading.Thread(target=self.admin.run, name='facebot-admin-watchdog', daemon=True)
+            self.admin_thread.start()
+        if self.config.get('prevent_sleep', False):
+            self.sleep_guard = SleepGuard(self.stop_event, self.logger)
+            self.sleep_thread = threading.Thread(target=self.sleep_guard.run, name='facebot-sleep-guard', daemon=True)
+            self.sleep_thread.start()
+
+    def stop_support(self):
+        self.stop_event.set()
+        if self.admin is not None:
+            self.admin.stop_event.set()
+        # Both independent watchdogs begin shutdown before we reap voice, so
+        # admin's grace period does not get added to voice's grace period.
+        self.stop_child()
+        if self.admin_thread is not None:
+            self.admin_thread.join(self.config['stop_timeout'] + self.config['health_timeout'] + 5)
+            if self.admin_thread.is_alive():
+                raise TimeoutError('Owner watchdog shutdown timed out')
+        if self.sleep_thread is not None:
+            self.sleep_thread.join(5)
+            if self.sleep_thread.is_alive():
+                raise TimeoutError('Sleep guard shutdown timed out')
 
     def run(self):
         self.state.mkdir(parents=True, exist_ok=True, mode=0o700)
@@ -123,6 +209,7 @@ class Supervisor:
             self.logger.addHandler(handler)
             failures = 0
             try:
+                self.start_support()
                 while not self.stop_event.is_set():
                     if port_occupied(self.config['port'], self.config.get('host', '127.0.0.1')):
                         # A manual release or orphan is not ours to kill/adopt.
@@ -179,7 +266,7 @@ class Supervisor:
                     self.report('backoff', reason=reason, retry_seconds=delay)
                     self.stop_event.wait(delay)
             finally:
-                self.stop_child()
+                self.stop_support()
                 self.report('stopped')
                 self.logger.removeHandler(handler)
                 handler.close()
@@ -272,11 +359,31 @@ def build_config(args):
         command.append('--allow-private-lan')
     elif args.trusted_lan:
         raise ValueError('--trusted-lan requires an explicit private LAN address')
-    return dict(root=str(root), command=command, host=args.host,
+    config = dict(root=str(root), command=command, host=args.host,
                 token_file=str(token), port=args.port, profile=args.profile,
                 model=args.model, tts=args.tts, speech_rate=args.speech_rate,
                 interval=5, health_timeout=2, health_failures=3, startup_timeout=180,
                 stop_timeout=10, backoff_initial=2, backoff_max=60, stable_reset=120)
+    config['prevent_sleep'] = not getattr(args, 'no_sleep_protection', False)
+    if not getattr(args, 'no_admin', False):
+        if not (root / 'server/admin.py').is_file():
+            raise ValueError('Owner-controls module missing from release')
+        if args.port != 8765:
+            raise ValueError('Owner controls require voice port 8765; use --no-admin for custom voice ports')
+        if token != (root / '.local/pairing-token').resolve():
+            raise ValueError('Owner controls require this release pairing-token path; use --no-admin for an external token')
+        admin_port = getattr(args, 'admin_port', 8766)
+        if not 1 <= admin_port <= 65535 or admin_port == args.port:
+            raise ValueError('Choose a distinct valid owner-controls port')
+        admin_command = [str(python), '-m', 'server.admin', '--host', args.host, '--port', str(admin_port)]
+        for owner in getattr(args, 'owner_client', []):
+            if not private_lan_host(owner):
+                raise ValueError('Owner clients require explicit RFC1918 IPv4 addresses')
+            admin_command.extend(['--allow-client', owner])
+        config['admin'] = dict(role='admin', host=args.host, port=admin_port, command=admin_command)
+    elif getattr(args, 'owner_client', []):
+        raise ValueError('--owner-client requires owner controls')
+    return config
 
 
 def install(args, state):
@@ -285,6 +392,8 @@ def install(args, state):
     config = build_config(args)
     if port_occupied(config['port'], config.get('host', '127.0.0.1')):
         raise ValueError('Port occupied; the runtime owner must stop the previous server first')
+    if config.get('admin') and port_occupied(config['admin']['port'], config['admin']['host']):
+        raise ValueError('Owner-controls port occupied; its owner must stop it before installation')
     if plist_path().exists():
         raise ValueError('Existing installation; uninstall before replacing its configuration')
     state.mkdir(parents=True, exist_ok=True, mode=0o700)
@@ -321,6 +430,10 @@ def main():
     setup.add_argument('--port', type=int, default=8765)
     setup.add_argument('--host', default='127.0.0.1', help='Loopback or explicit RFC1918 IPv4 address')
     setup.add_argument('--trusted-lan', action='store_true', help='Opt into unencrypted service on a trusted private LAN')
+    setup.add_argument('--no-admin', action='store_true', help='Disable the independently supervised owner controls')
+    setup.add_argument('--admin-port', type=int, default=8766)
+    setup.add_argument('--owner-client', action='append', default=[], help='Allow an explicit owner device RFC1918 IP to use controls; repeat if needed')
+    setup.add_argument('--no-sleep-protection', action='store_true', help='Do not inhibit idle system sleep while service runs')
     for action in ('run', 'start', 'stop', 'restart', 'status', 'uninstall'):
         sub.add_parser(action)
     args = parser.parse_args()
@@ -336,7 +449,10 @@ def main():
         value['observation_age_seconds'] = round(time.time() - value.get('updated_at', time.time()), 1)
         value['launchd_loaded'] = is_loaded() if sys.platform == 'darwin' else False
         config_file = state / 'config.json'
-        value['healthy_now'] = healthy(json.loads(config_file.read_text())) if config_file.exists() else False
+        config = json.loads(config_file.read_text()) if config_file.exists() else None
+        value['healthy_now'] = healthy(config) if config else False
+        if config and config.get('admin'):
+            value['admin_healthy_now'] = healthy({**config, **config['admin']})
         print(json.dumps(value, indent=2))
         return 0
     if sys.platform != 'darwin':

@@ -27,14 +27,14 @@ root = Path(sys.argv[1])
 (root / 'observed.json').write_text(json.dumps({key:os.environ[key] for key in
  ['FACEBOT_PROFILE','FACEBOT_LLM','FACEBOT_TTS','FACEBOT_SPEECH_RATE','FACEBOT_KIOSK_MODE']}))
 with (root / 'starts').open('a') as stream: stream.write(str(time.time()) + '\n')
-print(os.environ['FACEBOT_TOKEN'], flush=True)
+print(os.environ.get('FACEBOT_TOKEN',''), flush=True)
 mode = root / 'mode'
 if mode.read_text() == 'exit': sys.exit(7)
 signal.signal(signal.SIGTERM, signal.SIG_IGN)
 class Handler(BaseHTTPRequestHandler):
  def do_GET(self):
   if mode.read_text() == 'hang': time.sleep(30)
-  value = {'status':'ready','profile':os.environ['FACEBOT_PROFILE'], 'tts':{'backend':os.environ['FACEBOT_TTS']}}
+  value = {'status':'ready','profile':os.environ['FACEBOT_PROFILE'], 'etag':'fixture', 'tts':{'backend':os.environ['FACEBOT_TTS']}}
   if mode.read_text() == 'wrong_profile': value['profile'] = 'wrong'
   raw = json.dumps(value).encode()
   self.send_response(200); self.end_headers(); self.wfile.write(raw)
@@ -104,7 +104,7 @@ class KioskRecoveryTests(unittest.TestCase):
         args = SimpleNamespace(root=str(SCRIPT.parents[1]), python=sys.executable,
                                token_file=str(self.root / 'token'), profile='halloween',
                                model='qwen2.5:1.5b', tts='kokoro', speech_rate=1.12,
-                               host='192.168.1.50', trusted_lan=False, port=8765)
+                               host='192.168.1.50', trusted_lan=False, port=8765, no_admin=True)
         with self.assertRaises(ValueError): kiosk.build_config(args)
         args.trusted_lan = True
         config = kiosk.build_config(args)
@@ -116,6 +116,110 @@ class KioskRecoveryTests(unittest.TestCase):
         self.assertEqual(config['tts'], args.tts)
         args.host = '0.0.0.0'
         with self.assertRaises(ValueError): kiosk.build_config(args)
+
+    def configure_admin_fixture(self):
+        directory = self.root / 'admin-fixture'
+        directory.mkdir()
+        (directory / 'mode').write_text('ready')
+        with socket.socket() as sock:
+            sock.bind(('127.0.0.1', 0))
+            port = sock.getsockname()[1]
+        self.config['admin'] = dict(role='admin', host='127.0.0.1', port=port,
+            command=[sys.executable, str(self.fixture), str(directory), str(port)])
+        return directory
+
+    def admin_ready(self):
+        def ready():
+            try:
+                return json.loads((self.state / 'admin/status.json').read_text()).get('phase') == 'ready'
+            except FileNotFoundError:
+                return False
+        wait_for(ready)
+
+    def test_admin_and_voice_crashes_recover_independently_then_both_reap(self):
+        self.configure_admin_fixture()
+        self.start()
+        self.ready()
+        self.admin_ready()
+        voice_pid = self.supervisor.child.pid
+        admin_pid = self.supervisor.admin.child.pid
+        os.kill(admin_pid, signal.SIGKILL)
+        wait_for(lambda: self.supervisor.admin.child and self.supervisor.admin.child.pid != admin_pid)
+        self.admin_ready()
+        self.assertEqual(self.supervisor.child.pid, voice_pid)
+        admin_pid = self.supervisor.admin.child.pid
+        os.kill(voice_pid, signal.SIGKILL)
+        wait_for(lambda: self.supervisor.child and self.supervisor.child.pid != voice_pid)
+        self.ready()
+        self.assertEqual(self.supervisor.admin.child.pid, admin_pid)
+        voice_pid = self.supervisor.child.pid
+        self.supervisor.stop_event.set()
+        self.thread.join(4)
+        self.assertFalse(self.thread.is_alive())
+        for pid in (voice_pid, admin_pid):
+            with self.assertRaises(ProcessLookupError): os.kill(pid, 0)
+
+    def test_hung_admin_recovers_without_interrupting_voice(self):
+        directory = self.configure_admin_fixture()
+        self.start()
+        self.ready()
+        self.admin_ready()
+        voice_pid = self.supervisor.child.pid
+        admin_pid = self.supervisor.admin.child.pid
+        (directory / 'mode').write_text('hang')
+        wait_for(lambda: self.supervisor.admin.restarts >= 1)
+        (directory / 'mode').write_text('ready')
+        wait_for(lambda: self.supervisor.admin.child and self.supervisor.admin.child.pid != admin_pid)
+        self.admin_ready()
+        self.assertEqual(self.supervisor.child.pid, voice_pid)
+        self.assertTrue(kiosk.healthy(self.config))
+
+    def test_admin_install_defaults_host_only_and_requires_explicit_private_owner(self):
+        root = self.root / 'release'
+        (root / 'server').mkdir(parents=True)
+        (root / 'server/app.py').touch()
+        (root / 'server/admin.py').touch()
+        (root / '.local').mkdir()
+        (root / '.local/pairing-token').write_text(self.token)
+        args = SimpleNamespace(root=str(root), python=sys.executable, token_file=None,
+                               profile='halloween', model='qwen2.5:1.5b', tts='kokoro', speech_rate=1.12,
+                               host='192.168.1.50', trusted_lan=True, port=8765, owner_client=[])
+        config = kiosk.build_config(args)
+        self.assertTrue(config['prevent_sleep'])
+        self.assertEqual(config['admin']['host'], args.host)
+        self.assertEqual(config['admin']['port'], 8766)
+        self.assertNotIn('--allow-client', config['admin']['command'])
+        args.owner_client = ['192.168.1.60']
+        self.assertEqual(kiosk.build_config(args)['admin']['command'][-2:], ['--allow-client', '192.168.1.60'])
+        args.owner_client = ['8.8.8.8']
+        with self.assertRaises(ValueError): kiosk.build_config(args)
+        args.owner_client = []
+        args.port = 9000
+        with self.assertRaises(ValueError): kiosk.build_config(args)
+        args.no_admin = args.no_sleep_protection = True
+        config = kiosk.build_config(args)
+        self.assertNotIn('admin', config)
+        self.assertFalse(config['prevent_sleep'])
+
+    def test_sleep_guard_is_scoped_to_stop_and_reaps_its_owned_helper(self):
+        stop = threading.Event()
+        guard = kiosk.SleepGuard(stop, self.supervisor.logger,
+                                 command=[sys.executable, '-c', 'import time; time.sleep(30)'])
+        thread = threading.Thread(target=guard.run)
+        thread.start()
+        try:
+            wait_for(guard.active)
+            pid = guard.process.pid
+            stop.set()
+            thread.join(3)
+            self.assertFalse(thread.is_alive())
+            self.assertFalse(guard.active())
+            with self.assertRaises(ProcessLookupError): os.kill(pid, 0)
+        finally:
+            stop.set()
+            thread.join(5)
+        self.assertEqual(kiosk.SleepGuard(stop, self.supervisor.logger).command,
+                         ['/usr/bin/caffeinate', '-i', '-w', str(os.getpid())])
 
     def test_child_death_recovers_same_configuration_without_token_logs(self):
         self.start()

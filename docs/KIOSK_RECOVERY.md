@@ -1,8 +1,8 @@
 # Local kiosk recovery
 
-`scripts/kiosk-service.py` runs Facebot as a macOS user LaunchAgent. It uses no model calls or paid services. A small foreground supervisor starts the server, observes `/health`, and replaces only its own child after exit or sustained HTTP failure. Launchd restarts the supervisor and removes its process group if the supervisor dies.
+`scripts/kiosk-service.py` runs Facebot as a macOS user LaunchAgent. It uses no model calls or paid services. A small foreground supervisor starts voice and owner controls, observes voice `/health` and owner `/api/settings`, and replaces only its own failed child. The children recover independently: an owner-controls crash does not interrupt voice, and voice recovery leaves the shop available. Launchd restarts the supervisor and removes its process group if the supervisor dies.
 
-This is process and HTTP recovery. It does not establish microphone recognition, audible speech, a healthy inference pipeline, Wi-Fi coverage, tablet reconnection, or 12-hour endurance. The model engine, network and tablet have their own lifecycle. The Mac must remain powered and awake; this user agent starts **after login**, not at the pre-login screen. FileVault/reboot still requires the owner to log in.
+This is process and HTTP recovery. It does not establish microphone recognition, audible speech, a healthy inference pipeline, Wi-Fi coverage, tablet reconnection, or 12-hour endurance. The model engine, network and tablet have their own lifecycle. The service uses `caffeinate -i -w SUPERVISOR_PID` to prevent idle system sleep only while it runs. This does not override a closed lid, explicit sleep/shutdown or lost power. The Mac must remain powered and awake; this user agent starts **after login**, not at the pre-login screen. FileVault/reboot still requires the owner to log in.
 
 ## Install a tested release
 
@@ -24,6 +24,10 @@ python3 scripts/kiosk-service.py status
 
 Loopback is the default. For the native app's explicit trusted-LAN connection, add `--host 192.168.1.50 --trusted-lan`, replacing the address with this Mac's current RFC1918 IPv4 address. This produces server arguments `--host PRIVATE_IP --allow-private-lan`; it requires the integrated server release with that flag. Wildcards, public addresses, link-local addresses and hostnames are rejected. Trusted LAN is unencrypted: use an owner-controlled private network, never forward the port to the internet. A DHCP reservation keeps the tablet's saved server address usable. Changing the Mac's address requires updating both installation and tablet connection.
 
+New installs also run the owner settings and free skill shop at `http://YOUR_BIND_HOST:8766/` and `/store`. Access defaults to the host Mac only; to allow one owner phone/tablet, explicitly add `--owner-client 192.168.1.60` at installation (repeat for additional owner devices). An arbitrary visitor on the same LAN is not allowed. Bind host follows the voice host; do not broaden it to a wildcard. `--admin-port` changes the owner UI port; the integrated proxy currently requires voice port 8765. `--no-admin` disables this child for a voice-only setup/custom voice port, and `--no-sleep-protection` disables the idle-sleep inhibitor.
+
+The owner child requires the release's `.local/pairing-token` path (a shared private `.local` symlink is supported), because its voice proxy uses that file. The token is not passed to the admin child's environment. Existing saved service configurations retain their previous behavior; to adopt owner controls and sleep protection, uninstall and reinstall with the same release/profile/model/TTS/host/owner choices. Stop a separately launched admin listener through its owner first; installation refuses an occupied admin port.
+
 The token is read from its existing private file on every child launch. It never enters the plist, command arguments, status or logs. Server stdout/stderr are discarded deliberately; lifecycle-only logs avoid capturing tokens, speech or visitor content. Debug startup errors separately in an owner-controlled foreground session after stopping the service.
 
 The generated plist lives at `~/Library/LaunchAgents/org.facebot.kiosk.plist`; state is `~/Library/Application Support/Facebot/kiosk/`. A custom `--state-dir /absolute/private/path` can precede every command. The shared lock always stays at `~/Library/Application Support/Facebot/kiosk-owner.lock`, so differing release trees/state directories cannot launch competing kiosk supervisors. Never delete this lock to force a takeover.
@@ -40,11 +44,11 @@ python3 scripts/kiosk-service.py uninstall
 
 `restart` waits for launchd to finish removing the old job before registering its replacement. Each stop/start phase has a 30-second deadline; transient bootstrap failures retry after 0.25 seconds, doubling to a maximum 2-second delay. Repeated `start` or `stop` commands are idempotent. A failed deadline returns an error instead of starting a competing job or retrying forever.
 
-`status` shows the last phase, its age, current health and whether launchd has the job loaded. A stale `ready` observation is historical; require `healthy_now: true`, a fresh observation and `launchd_loaded: true`. `child_pid` identifies only the currently supervised child. `stop` unloads the job so launchd does not immediately replace it; it remains installed for the next login or explicit `start`. `uninstall` unloads and removes the plist, while retaining private configuration and bounded logs for rollback. To change release/configuration, uninstall and install again with the desired arguments.
+`status` shows the last phase, its age, current health and whether launchd has the job loaded. A stale `ready` observation is historical; require `healthy_now: true`, a fresh observation and `launchd_loaded: true`. `child_pid` identifies the voice child. Nested `admin` status identifies the owner child and its watchdog, `admin_healthy_now` checks the current owner endpoint, and `idle_sleep_protected` reports whether the owned inhibitor is alive. `stop` unloads the job so launchd does not immediately replace it; it remains installed for the next login or explicit `start`. `uninstall` unloads and removes the plist, while retaining private configuration and bounded logs for rollback. To change release/configuration, uninstall and install again with the desired arguments.
 
 A child has 180 seconds to become ready (including model/audio prewarming). Then the watchdog checks every 5 seconds, with a 2-second HTTP timeout and three consecutive failures before replacement. Child shutdown allows 10 seconds, then kills/reaps a stuck child. Retry delay doubles from 2 to a maximum of 60 seconds; two continuous healthy minutes reset it. Thus an indefinitely broken installation retries at most once per minute after the initial attempts, rather than thrashing. Launchd separately throttles supervisor respawns to 30 seconds. `port_conflict` waits 60 seconds without touching the other process.
 
-`recovery.log` plus two rotations occupy less than 768 KiB; status/configuration files are private, fixed-size records. No server output is captured. `backoff` includes a bounded classification (`child_exit`, `health_timeout`, `startup_timeout`, `start_error`), not an exception, environment or response body.
+Each child watchdog has `recovery.log` plus two rotations, under 768 KiB per child (voice in the state directory, admin in its `admin/` subdirectory); status/configuration files are private, fixed-size records. No server output is captured. `backoff` includes a bounded classification (`child_exit`, `health_timeout`, `startup_timeout`, `start_error`), not an exception, environment or response body.
 
 ## Verification and recovery drill
 
@@ -54,7 +58,7 @@ The deterministic suite uses temporary listeners and actual child processes; it 
 python3 -m unittest discover -s tests -p test_kiosk_service.py -v
 ```
 
-It covers child SIGKILL, hung HTTP with ignored SIGTERM, profile mismatch, foreign listener refusal, two competing supervisors, exponential retry limits, clean reap/lease release, log retention, token exclusion, RFC1918 validation and generated plist configuration. Plist generation tests mock launchctl; they are not evidence of OS-level restart behavior.
+It covers independent voice/admin SIGKILL recovery, hung admin without interrupting voice, scoped sleep-helper cleanup, hung HTTP with ignored SIGTERM, profile mismatch, foreign listener refusal, two competing supervisors, exponential retry limits, clean reap/lease release, log retention, token exclusion, RFC1918 validation and generated plist configuration. Plist generation tests mock launchctl; they are not evidence of OS-level restart behavior.
 
 After authorized activation, the runtime owner records the actual release commit, fresh health and tablet connection, then performs a brief idle recovery drill:
 
