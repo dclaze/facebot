@@ -148,13 +148,17 @@ def main():
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--prewarm', action='store_true')
     parser.add_argument('--limit', type=int, default=0)
-    parser.add_argument('--voice', default='af_heart')
-    parser.add_argument('--speech-rate', type=float, default=1.12)
+    parser.add_argument('--voice', default=None)
+    parser.add_argument('--speech-rate', type=float, default=None)
     args = parser.parse_args()
     result = {'evidence': 'offline actual processor replay; no microphone, network, device or acoustic measurement',
               'routes': asyncio.run(routes()), 'behavior': asyncio.run(behavior())}
     if args.prewarm:
-        result['speech'] = speech(args.limit, args.voice, args.speech_rate)
+        from server.profiles import active
+        from server.settings import read as read_settings
+        voice = args.voice or active()['character_profile']['voice']
+        speech_rate = args.speech_rate if args.speech_rate is not None else read_settings()['speech_rate']
+        result['speech'] = speech(args.limit, voice, speech_rate)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(result, indent=2) + '\n')
     print(json.dumps({key: value for key, value in result.items() if key != 'speech'}, indent=2))

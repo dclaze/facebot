@@ -37,9 +37,13 @@ Run:
 
 ```sh
 .venv/bin/python -m unittest tests.test_kiosk_experiences tests.test_reply_quality tests.test_tts_stream
-.venv/bin/python scripts/benchmark-kiosk.py --output .local/kiosk-evidence/benchmark.json --prewarm --speech-rate 1.12
+.venv/bin/python scripts/benchmark-kiosk.py --output .local/kiosk-evidence/benchmark.json --prewarm
 .venv/bin/python scripts/render-kiosk-preview.py .local/kiosk-evidence/previews/NEW_VERSION
 ```
+
+Prewarm reads the current settings speech rate and profile voice; explicit
+`--speech-rate` and `--voice` overrides let an isolated tree prepare the exact
+deployment configuration without copying private settings.
 
 Renderer needs the existing Pillow/NumPy/SciPy/imageio-ffmpeg development tools.
 If they live outside the venv, supply their existing directory through PYTHONPATH.
